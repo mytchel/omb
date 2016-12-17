@@ -100,6 +100,8 @@ initpages(struct page *p, struct page **from, size_t npages,
 
   for (i = 0; i < npages; i++) {
     p[i].refs = 0;
+    p[i].hookrefs = 0;
+    p[i].hook = nil;
     p[i].pa = start;
     p[i].forceshare = forceshare;
     p[i].next = &p[i+1];

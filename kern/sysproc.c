@@ -277,10 +277,13 @@ sysmmap(int flags, size_t len, int fd, va_list ap)
   }
 
   if (pages != nil) {
-    return (reg_t) insertpages(up->mgroup, pages, len);
+    addr = insertpages(&up->mgroup->pages, pages, len);
+    
   } else {
-    return nil;
+    addr = nil;
   }
+
+  return (reg_t) addr;
 }
 
 reg_t
@@ -313,8 +316,7 @@ sysmunmap(void *addr, size_t size)
 
       p = pt;
     } else {
-      ret = ERR;
-      break;
+      p = p->next;
     }
   }
 	

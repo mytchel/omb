@@ -30,85 +30,19 @@
 #include <string.h>
 #include <fs.h>
 #include <fssrv.h>
+#include <am335x/uart.h>
 
-#define UART_LEN   	0x1000
-#define UART0   	0x44E09000
-#define UART0_INTR      72
+#include "com.h"
 
-#define BUFMAX          512
-
-struct uart_struct {
-  uint32_t hr;
-  uint32_t ier;
-  uint32_t iir;
-  uint32_t lcr;
-  uint32_t mcr;
-  uint32_t lsr;
-  uint32_t tcr;
-  uint32_t spr;
-  uint32_t mdr1;
-  uint32_t mdr2;
-  uint32_t txfll;
-  uint32_t txflh;
-  uint32_t rxfll;
-  uint32_t rxflh;
-  uint32_t blr;
-  uint32_t uasr;
-  uint32_t scr;
-  uint32_t ssr;
-  uint32_t eblr;
-  uint32_t mvr;
-  uint32_t sysc;
-  uint32_t syss;
-  uint32_t wer;
-  uint32_t cfps;
-  uint32_t rxfifo_lvl;
-  uint32_t txfifo_lvl;
-  uint32_t ier2;
-  uint32_t isr2;
-  uint32_t freq_sel;
-  uint32_t mdr3;
-  uint32_t tx_dma_threshold;
-};
-
-struct readreq {
-  uint32_t rid;
-  uint32_t len;
-  uint8_t *buf;
-  struct readreq *next;
-};
-
-static volatile struct uart_struct *uart = nil;
-
-static struct readreq *readrequests;
-static int lock;
-static int fsin, fsout;
+volatile struct uart_regs *uart = nil;
+struct readreq *readreqs = nil;
+int addr = ERR;
 
 static struct stat rootstat = {
-  ATTR_wr|ATTR_rd,
+  ATTR_wr|ATTR_rd|ATTR_appendonly,
   0,
   UART_LEN,
 };
-
-static void
-getlock(void)
-{
-  int s;
-
-  s = 1;
-  while (!cas(&lock, (void *) 0, (void *) 1)) {
-    sleep(s);
-    s *= 2;
-  }
-}
-
-static void
-freelock(void)
-{
-  lock = 0;
-}
-
-#define putc(c) {while ((uart->lsr & (1 << 5)) == 0); uart->hr = c;}
 
 static size_t
 puts(uint8_t *s, size_t len)
@@ -126,217 +60,122 @@ puts(uint8_t *s, size_t len)
   return i;
 }
 
-static int
-readloop(void)
+static void
+addreadreq(struct request_read *req, uint32_t mid)
 {
-  struct response_head resp;
-  struct readreq *req;
-  uint8_t c, data[BUFMAX];
-  uint32_t done;
-  uint8_t i;
-  
-  uart->ier = 1;
+  struct readreq *n, *o;
 
+  n = malloc(sizeof(struct readreq));
+
+  n->len = req->body.len;
+  n->mid = mid;
+  n->next = nil;
+  
   while (true) {
-    while ((req = readrequests) == nil) {
-      sleep(10);
-    }
+    o = readreqs;
 
-    getlock();
+    while (o != nil && o->next != nil)
+      o = o->next;
 
-    readrequests = req->next;
-
-    freelock();
-
-    done = 0;
-    while (done < req->len) {
-      for (i = 0; i < 0xf; i++) {
-	if (uart->lsr & 1) {
-	  goto copy;
-	}
+    if (o == nil) {
+      if (cas(&readreqs, nil, n)) {
+	break;
       }
-
-      waitintr(UART0_INTR);
-
-    copy:
-
-      c = (uint8_t) (uart->hr & 0xff);
-
-      if (c == '\r') {
-	putc('\r');
-	putc('\n');
-	c = '\n';
-      } else if (c >= ' ' && c < 127) {
-	putc(c);
-      }
-
-      data[done++] = c;
+    } else if (cas(&o->next, nil, n)) {
+      break;
     }
-
-    resp.rid = req->rid;
-    resp.ret = OK;
-
-    free(req);
-
-    getlock();
-    
-    if (write(fsout, &resp, sizeof(resp)) < 0) {
-      return ELINK;
-    }
-    
-    if (write(fsout, data, done) < 0) {
-      return ELINK;
-    }
-
-    freelock();
   }
-
-  return OK;
 }
 
 static void
-addreadreq(struct request_read *req)
+bwrite(struct request_write *req, struct response_write *resp)
 {
-  struct readreq *read, *r;
-
-  read = malloc(sizeof(struct readreq));
-  if (read == nil) {
-    return;
-  }
-
-  read->rid = req->head.rid;
-  read->len = req->body.len;
-  read->next = nil;
-
-  getlock();
-  
-  for (r = readrequests; r != nil && r->next != nil; r = r->next)
-    ;
-
-  if (r == nil) {
-    readrequests = read;
-  } else {
-    r->next = read;
-  }
-
-  freelock();
+  resp->body.len = puts(req->body.data, req->body.len);
+  resp->head.ret = OK;
 }
 
 static void
-comstat(struct request_stat *req, struct response_stat *resp)
+bstat(struct request_stat *req, struct response_stat *resp)
 {
   memmove(&resp->body.stat, &rootstat, sizeof(struct stat));
   resp->head.ret = OK;
 }
 
 static void
-comopen(struct request_open *req, struct response_open *resp)
+bopen(struct request_open *req, struct response_open *resp)
 {
   resp->head.ret = OK;
+  resp->body.offset = 0;
 }
 
 static void
-comclose(struct request_close *req, struct response_close *resp)
+bclose(struct request_close *req, struct response_close *resp)
 {
-  resp->head.ret = OK;
-}
-
-static void
-comwrite(struct request_write *req, struct response_write *resp)
-{
-  resp->body.len = puts(req->body.data, req->body.len);
   resp->head.ret = OK;
 }
 
 int
-comfsmountloop(void)
+mountloop(void)
 {
+  uint8_t reqbuf[MESSAGELEN], respbuf[MESSAGELEN];
   struct response *resp;
   struct request *req;
-  uint8_t wdata[BUFMAX];
-  size_t len;
+  uint32_t mid;
 
-  req = malloc(sizeof(struct request));
-  if (req == nil) {
-    return ENOMEM;
-  }
-  
-  resp = malloc(sizeof(struct response));
-  if (resp == nil) {
-    free(req);
-    return ENOMEM;
-  }
+  req = (struct request *) reqbuf;
+  resp = (struct response *) respbuf;
 
   while (true) {
-    if ((len = read(fsin, req, sizeof(struct request))) < 0) {
+    if (recv(addr, &mid, req) != OK) {
       return ELINK;
     }
-
-    resp->head.rid = req->head.rid;
 
     switch (req->head.type) {
     case REQ_stat:
-      len = sizeof(struct response_stat);
-      comstat((struct request_stat *) req,
-	      (struct response_stat *) resp);
+      bstat((struct request_stat *) req,
+	    (struct response_stat *) resp);
       break;
 
     case REQ_open:
-      len = sizeof(struct response_open);
-      comopen((struct request_open *) req,
-	      (struct response_open *) resp);
+      bopen((struct request_open *) req,
+	    (struct response_open *) resp);
       break;
 
     case REQ_close:
-      len = sizeof(struct response_close);
-      comclose((struct request_close *) req,
-	      (struct response_close *) resp);
+      bclose((struct request_close *) req,
+	     (struct response_close *) resp);
       break;
 
     case REQ_write:
-      req->write.data = wdata;
-      if (read(fsin, wdata, req->write.len) < 0) {
-	return ELINK;
-      }
-
-      len = sizeof(struct response_write);
-      comwrite((struct request_write *) req,
-	      (struct response_write *) resp);
+      bwrite((struct request_write *) req,
+	     (struct response_write *) resp);
       break;
 
     case REQ_read:
-      addreadreq((struct request_read *) req);
-      /* Dont write a response */
+      addreadreq((struct request_read *) req, mid);
       continue;
-      break;
 
     default:
       resp->head.ret = ENOIMPL;
-      len = sizeof(struct response_head);
     }
 
-    getlock();
-
-    if (write(fsout, resp, len) < 0) {
+    if (reply(addr, mid, resp) != OK) {
       return ELINK;
     }
-    
-    freelock();
   }
 
-  return 0;
+  return ERR;
 }
  
 int
 commount(char *path)
 {
-  int f, fd, p1[2], p2[2];
+  int f, fd;
   size_t size = UART_LEN;
 
-  if (pipe(p1) == ERR) {
-    return -1;
-  } else if (pipe(p2) == ERR) {
-    return -1;
+  addr = serv();
+  if (addr < 0) {
+    return addr;
   }
 
   fd = open(path, O_WRONLY|O_CREATE, rootstat.attr);
@@ -344,25 +183,19 @@ commount(char *path)
     return -2;
   }
 
-  if (mount(p1[1], p2[0], path, rootstat.attr) == ERR) {
+  if (mount(addr, path, rootstat.attr) == ERR) {
     return -3;
   }
 
   close(fd);
-  close(p1[1]);
-  close(p2[0]);
 
   f = fork(FORK_proc);
   if (f > 0) {
-    close(p1[0]);
-    close(p2[1]);
+    unserv(addr);
     return f;
   }
 
-  fsout = p2[1];
-  fsin = p1[0];
- 
-  uart = (struct uart_struct *)
+  uart = (struct uart_regs *)
     mmap(MEM_io|MEM_rw, size, 0, 0, (void *) UART0);
 
   if (uart == nil) {
@@ -370,10 +203,12 @@ commount(char *path)
   }
 
   f = fork(FORK_thread);
-  if (f == 0) {
+  if (f < 0) {
+    f = -5;
+  } else if (f > 0) {
     f = readloop();
   } else {
-    f = comfsmountloop();
+    f = mountloop();
   }
 
   exit(f);

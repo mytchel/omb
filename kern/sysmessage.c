@@ -53,7 +53,7 @@ sysunserv(int addr)
 {
   struct addr *a;
   
-  if (addr >= up->agroup->naddrs) {
+  if (addr < 0 || addr >= up->agroup->naddrs) {
     return ERR;
   } else if ((a = up->agroup->addrs[addr]) == nil) {
     return ERR;
@@ -81,7 +81,7 @@ sysmessage(int addr, void *umb, void *urb)
     return ERR;
   }
 
-  if (addr >= up->agroup->naddrs) {
+  if (addr < 0 || addr >= up->agroup->naddrs) {
     return ERR;
   } else if ((a = up->agroup->addrs[addr]) == nil) {
     return ERR;
@@ -105,7 +105,7 @@ sysrecv(int addr, uint32_t *mid, void *umb)
     return ERR;
   }
 
-  if (addr >= up->agroup->naddrs) {
+  if (addr < 0 || addr >= up->agroup->naddrs) {
     return ERR;
   } else if ((a = up->agroup->addrs[addr]) == nil) {
     return ERR;
@@ -133,7 +133,7 @@ sysreply(int addr, uint32_t mid, void *urb)
     return ERR;
   }
 
-  if (addr >= up->agroup->naddrs) {
+  if (addr < 0 || addr >= up->agroup->naddrs) {
     return ERR;
   } else if ((a = up->agroup->addrs[addr]) == nil) {
     return ERR;

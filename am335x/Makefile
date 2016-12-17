@@ -53,6 +53,7 @@ all: init.list am335x.list am335x.umg
 ISRC = \
 	init.c                  \
 	com/com.c               \
+	com/in.c                \
 	gpio/gpio.c             \
 	mmc/mmchs.c             \
 	mmc/emmc.c              \

@@ -118,6 +118,21 @@ bstat(struct request_stat *req, struct response_stat *resp)
 }
 
 static void
+bwstat(struct request_wstat *req, struct response_wstat *resp)
+{
+  struct file *f;
+
+  f = findfile(root, req->head.fid);
+  if (f == nil) {
+    resp->head.ret = ENOFILE;
+    return;
+  }
+
+  f->stat.attr = req->body.stat.attr;
+  resp->head.ret = OK;
+}
+
+static void
 bopen(struct request_open *req, struct response_open *resp)
 {
   struct file *f;
@@ -377,36 +392,33 @@ static struct fsmount fsmount = {
   .getfid = &bgetfid,
   .clunk = &bclunk,
   .stat = &bstat,
+  .wstat = &bwstat,
   .open = &bopen,
   .close = &bclose,
   .create = &bcreate,
   .remove = &bremove,
-  .read = &bread,
-  .write = &bwrite,
+  .map = &bmap,
+  .unmap = &bunmap,
+  .flush = &bflush,
 };
 
 int
 mounttmp(char *path)
 {
-  int f, p1[2], p2[2];
-  
-  if (pipe(p1) == ERR) {
-    return ERR;
-  } else if (pipe(p2) == ERR) {
-    return ERR;
+  int f, addr;
+
+  addr = serv();
+  if (addr < 0) {
+    return addr;
   }
 
-  if (mount(p1[1], p2[0], path, ATTR_rd|ATTR_wr|ATTR_dir) == ERR) {
+  if (mount(addr, path, ATTR_rd|ATTR_wr|ATTR_dir) == ERR) {
     return ERR;
   }
 	
-  close(p1[1]);
-  close(p2[0]);
-
   f = fork(FORK_proc);
   if (f != 0) {
-    close(p1[0]);
-    close(p2[1]);
+    unserv(addr);
     return OK;
   }
 
@@ -430,15 +442,10 @@ mounttmp(char *path)
   root->parent = nil;
   root->children = nil;
 
-  fsmount.databuf = malloc(512);
-  fsmount.buflen = 512;
-
-  f = fsmountloop(p1[0], p2[1], &fsmount);
+  f = fsmountloop(addr, &fsmount);
 
   printf("tmp mount on %s exiting with %i\n",
 	 path, f);
-  
-  free(fsmount.databuf);
   
   exit(f);
 }

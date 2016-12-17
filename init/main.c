@@ -54,7 +54,12 @@ readline(char *data, size_t max)
     r = read(STDIN, &c, sizeof(char));
     if (r <= 0) {
       return -1;
-    } else if (c == '\n') {
+    }
+
+    write(STDOUT, &c, sizeof(char));
+
+    if (c == '\n') {
+      write(STDOUT, "break\n", 6);
       data[i] = '\0';
       return i;
     } else {

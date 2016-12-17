@@ -30,7 +30,7 @@ include $(BASE)/config.mk
 SUBDIR =
 SUBDIR += shell
 SUBDIR += fatfs
-SUBDIR += tmpfs
+#SUBDIR += tmpfs
 SUBDIR += bind
 SUBDIR += cat
 SUBDIR += cp

@@ -32,118 +32,279 @@
 
 #define ROOTFID		0 /* Of any binding. */
 
-enum {
-  REQ_getfid, REQ_clunk, REQ_stat,
-  REQ_open, REQ_close,
-  REQ_create, REQ_remove,
-  REQ_map, REQ_flush,
-  REQ_read, REQ_write,
-};
-
+#define REQ_getfid      1
+#define REQ_clunk       2
+#define REQ_stat        3
+#define REQ_wstat       4
+#define REQ_open        5
+#define REQ_close       6
+#define REQ_create      7
+#define REQ_remove      8
+#define REQ_map         9
+#define REQ_unmap      10
+#define REQ_read       11
+#define REQ_write      12
 
 struct request_head {
-  uint32_t rid;
   uint32_t fid;
   uint32_t type;
 };
 
 struct response_head {
-  uint32_t rid;
   int32_t ret;
 };
 
 
+/* getfid */
+
 struct request_getfid_b {
+  size_t len;
   char name[NAMEMAX];
 };
+
+struct request_getfid {
+  struct request_head head;
+  struct request_getfid_b body;
+};
+
 struct response_getfid_b {
   uint32_t fid;
   uint32_t attr;
 };
 
+struct response_getfid {
+  struct response_head head;
+  struct response_getfid_b body;
+};
+ 
+/* clunk */
 
 struct request_clunk_b {
   uint32_t fid;
 };
+
+struct request_clunk {
+  struct request_head head;
+  struct request_clunk_b body;
+};
+
 struct response_clunk_b {};
 
+struct response_clunk {
+  struct response_head head;
+  struct response_clunk_b body;
+};
+
+
+/* stat */
 
 struct request_stat_b {};
+
+struct request_stat {
+  struct request_head head;
+  struct request_stat_b body;
+};
+
 struct response_stat_b {
   struct stat stat;
 };
 
+struct response_stat {
+  struct response_head head;
+  struct response_stat_b body;
+};
+
+
+/* wstat */
+
+struct request_wstat_b {
+  struct stat stat;
+};
+
+struct request_wstat {
+  struct request_head head;
+  struct request_wstat_b body;
+};
+
+struct response_wstat_b {};
+
+struct response_wstat {
+  struct response_head head;
+  struct response_wstat_b body;
+};
+
+
+/* open */
 
 struct request_open_b {
   uint32_t mode;
 };
 
-struct response_open_b {};
+struct request_open {
+  struct request_head head;
+  struct request_open_b body;
+};
 
+#define FSSRV_FORCE_MAP (1 << 0)
+
+struct response_open_b {
+  uint32_t offset;
+  uint32_t abilities;
+};
+
+struct response_open {
+  struct response_head head;
+  struct response_open_b body;
+};
+
+
+/* close */
 
 struct request_close_b {};
+
+struct request_close {
+  struct request_head head;
+  struct request_close_b body;
+};
+
 struct response_close_b {};
 
+struct response_close {
+  struct response_head head;
+  struct response_close_b body;
+};
+
+
+/* create */
 
 struct request_create_b {
   uint32_t attr;
+  size_t len;
   char name[NAMEMAX];
 };
+
+struct request_create {
+  struct request_head head;
+  struct request_create_b body;
+};
+
 struct response_create_b {
   uint32_t fid;
 };
 
+struct response_create {
+  struct response_head head;
+  struct response_create_b body;
+};
+
+
+/* remove */
 
 struct request_remove_b {};
+
+struct request_remove {
+  struct request_head head;
+  struct request_remove_b body;
+};
+
 struct response_remove_b {};
 
+struct response_remove {
+  struct response_head head;
+  struct response_remove_b body;
+};
+
+
+/* map a page from a file */
 
 struct request_map_b {
   uint32_t offset;
-  uint32_t len;
+};
+
+struct request_map {
+  struct request_head head;
+  struct request_map_b body;
 };
 
 struct response_map_b {
   void *addr;
 };
 
-struct request_flush_b {
-  uint32_t offset;
-  uint32_t len;
+struct response_map {
+  struct response_head head;
+  struct response_map_b body;
 };
 
-struct response_flush_b {};
+
+/* unmap */
+
+struct request_unmap_b {
+  uint32_t offset;
+};
+
+struct request_unmap {
+  struct request_head head;
+  struct request_unmap_b body;
+};
+
+struct response_unmap_b {};
+
+struct response_unmap {
+  struct response_head head;
+  struct response_unmap_b body;
+};
+
+
+/* read */
 
 struct request_read_b {
   uint32_t offset;
   uint32_t len;
 };
-struct response_read_b {
-  /* Data should be sent in a seperate pipe write after head. */
-  uint8_t *data;
-  /* Used internally, do not send */
-  uint32_t len;
 
-  /*
-   * If the file is a directory then the result should 
-   * be in the format 
-   *    uint8_t name length [1, NAMEMAX] including null byte.
-   *    uint8_t *name... 
-   * for each file in the directory. 
-   *
-   */
+struct request_read {
+  struct request_head head;
+  struct request_read_b body;
 };
 
+#define READDATAMAX (MESSAGELEN - sizeof(struct response_head)	\
+		     - sizeof(uint32_t))
+struct response_read_b {
+  uint32_t len;
+  uint8_t data[READDATAMAX];
+};
+
+struct response_read {
+  struct response_head head;
+  struct response_read_b body;
+};
+
+
+/* write */
+
+#define WRITEDATAMAX (MESSAGELEN - sizeof(struct request_head)	\
+		      - sizeof(uint32_t) - sizeof(uint32_t))
 
 struct request_write_b {
   uint32_t offset;
   uint32_t len;
-  /* Data should be read in a second pipe read */
-  uint8_t *data;
+  uint8_t data[WRITEDATAMAX];
 };
+
+struct request_write {
+  struct request_head head;
+  struct request_write_b body;
+};
+
 struct response_write_b {
   uint32_t len;
 };
+
+struct response_write {
+  struct response_head head;
+  struct response_write_b body;
+};
+
 
 
 struct request {
@@ -152,10 +313,13 @@ struct request {
     struct request_getfid_b getfid;
     struct request_clunk_b clunk;
     struct request_stat_b stat;
+    struct request_wstat_b wstat;
     struct request_open_b open;
     struct request_close_b close;
     struct request_create_b create;
     struct request_remove_b remove;
+    struct request_map_b map;
+    struct request_unmap_b unmap;
     struct request_read_b read;
     struct request_write_b write;
   };
@@ -168,129 +332,19 @@ struct response {
     struct response_getfid_b getfid;
     struct response_clunk_b clunk;
     struct response_stat_b stat;
+    struct response_wstat_b wstat;
     struct response_open_b open;
     struct response_close_b close;
     struct response_create_b create;
     struct response_remove_b remove;
+    struct response_map_b map;
+    struct response_unmap_b unmap;
     struct response_read_b read;
     struct response_write_b write;
   };
 };
 
-struct request_getfid {
-  struct request_head head;
-  struct request_getfid_b body;
-};
-
-struct response_getfid {
-  struct response_head head;
-  struct response_getfid_b body;
-};
- 
-struct request_clunk {
-  struct request_head head;
-  struct request_clunk_b body;
-};
-
-struct response_clunk {
-  struct response_head head;
-  struct response_clunk_b body;
-};
- 
-struct request_stat {
-  struct request_head head;
-  struct request_stat_b body;
-};
-
-struct response_stat {
-  struct response_head head;
-  struct response_stat_b body;
-};
-
-struct request_open {
-  struct request_head head;
-  struct request_open_b body;
-};
-
-struct response_open {
-  struct response_head head;
-  struct response_open_b body;
-};
-
-struct request_close {
-  struct request_head head;
-  struct request_close_b body;
-};
-
-struct response_close {
-  struct response_head head;
-  struct response_close_b body;
-};
-
-struct request_create {
-  struct request_head head;
-  struct request_create_b body;
-};
-
-struct response_create {
-  struct response_head head;
-  struct response_create_b body;
-};
-
-struct request_remove {
-  struct request_head head;
-  struct request_remove_b body;
-};
-
-struct response_remove {
-  struct response_head head;
-  struct response_remove_b body;
-};
-
-struct request_map {
-  struct request_head head;
-  struct request_map_b body;
-};
-
-struct response_map {
-  struct response_head head;
-  struct response_map_b body;
-};
-
-struct request_flush {
-  struct request_head head;
-  struct request_flush_b body;
-};
-
-struct response_flush {
-  struct response_head head;
-  struct response_flush_b body;
-};
-
-struct request_read {
-  struct request_head head;
-  struct request_read_b body;
-};
-
-struct response_read {
-  struct response_head head;
-  struct response_read_b body;
-};
-
-struct request_write {
-  struct request_head head;
-  struct request_write_b body;
-};
-
-struct response_write {
-  struct response_head head;
-  struct response_write_b body;
-};
-
 struct fsmount {
-  uint8_t *databuf;
-  size_t buflen;
-
   void (*getfid)(struct request_getfid *,
 		 struct response_getfid *);
 
@@ -299,6 +353,9 @@ struct fsmount {
 
   void (*stat)(struct request_stat *,
 	       struct response_stat *);
+
+  void (*wstat)(struct request_wstat *,
+		struct response_wstat *);
 
   void (*open)(struct request_open *,
 	       struct response_open *);
@@ -313,10 +370,10 @@ struct fsmount {
 		 struct response_remove *);
   
   void (*map)(struct request_map *,
-	       struct response_map *);
+	      struct response_map *);
 
-  void (*flush)(struct request_flush *,
-		struct response_flush *);
+  void (*unmap)(struct request_unmap *,
+		struct response_unmap *);
 
   void (*read)(struct request_read *,
 	       struct response_read *);
@@ -326,7 +383,10 @@ struct fsmount {
 };
 
 int
-fsmountloop(int in, int out, struct fsmount *mount);
+mount(int addr, const char *path, uint32_t attr);
+
+int
+fsmountloop(int addr, struct fsmount *mount);
 
 #endif
 

@@ -32,7 +32,7 @@ syschdir(const char *upath)
 {
   struct path *path;
   struct chan *c;
-  int err;
+  int ret;
 
   if (kaddr(up, (void *) upath, 0) == nil) {
     return ERR;
@@ -40,10 +40,11 @@ syschdir(const char *upath)
 
   path = strtopath(up->dot, upath);
 
-  c = fileopen(path, O_RDONLY|O_DIR, 0, &err);
-  if (err != OK) {
+  ret = OK;
+  c = fileopen(path, O_RDONLY|O_DIR, 0, &ret);
+  if (ret != OK) {
     pathfree(path);
-    return err;
+    return ret;
   }
 
   pathfree(up->dot);
@@ -193,7 +194,7 @@ sysopen(const char *upath, uint32_t mode, ...)
   uint32_t cmode;
   struct chan *c;
   va_list ap;
-  int err;
+  int ret;
 
   kpath = kaddr(up, (void *) upath, 0);
   if (kpath == nil) {
@@ -209,15 +210,15 @@ sysopen(const char *upath, uint32_t mode, ...)
 
   path = strtopath(up->dot, kpath);
 
-  c = fileopen(path, mode, cmode, &err);
-
-  if (c == nil) {
+  ret = OK;
+  c = fileopen(path, mode, cmode, &ret);
+  if (ret != OK) {
     pathfree(path);
-    return err;
   } else {
-    err = fgroupaddchan(up->fgroup, c);
-    return err;
+    ret = fgroupaddchan(up->fgroup, c);
   }
+
+  return ret;
 }
 
 reg_t
@@ -264,72 +265,51 @@ sysremove(const char *upath)
 }
 
 reg_t
-sysmount(int outfd, int infd, const char *upath, uint32_t attr)
+sysmount(int addr, const char *upath, uint32_t attr)
 {
   struct bindingfid *fid;
-  struct chan *in, *out;
   struct binding *b;
   struct path *path;
   const char *kpath;
-  struct proc *p;
+  struct addr *a;
   int ret;
 
   kpath = kaddr(up, (void *) upath, 0);
   if (kpath == nil) {
     return ERR;
   }
-  
-  out = fdtochan(up->fgroup, outfd);
-  if (out == nil) {
-    return ERR;
-  } else if (!(out->mode & O_WRONLY)) {
-    return EMODE;
-  }
 
-  in = fdtochan(up->fgroup, infd);
-  if (in == nil) {
+  if (addr >= up->agroup->naddrs) {
     return ERR;
-  } else if  (!(in->mode & O_RDONLY)) {
-    return EMODE;
+  } else if ((a = up->agroup->addrs[addr]) == nil) {
+    return ERR;
   }
 
   path = strtopath(up->dot, kpath);
 
+  ret = OK;
   fid = findfile(path, &ret);
   if (ret != OK) {
+    pathfree(path);
     return ret;
   }
   
-  b = bindingnew(out, in, attr);
+  b = bindingnew(a, attr);
   if (b == nil) {
     bindingfidfree(fid);
     pathfree(path);
     return ENOMEM;
   }
 
-  p = procnew();
-  if (p == nil) {
-    bindingfidfree(fid);
-    bindingfree(b);
-    pathfree(path);
-    return ENOMEM;
-  }
-
   ret = ngroupaddbinding(up->ngroup, b, fid, b->fids);
+
   if (ret != OK) {
-    procexit(p, 0);
     bindingfree(b);
     bindingfidfree(fid);
     pathfree(path);
-    return ret;
   }
 
-  forkfunc(p, &mountproc, (void *) b);
-  b->srv = p;
-
-  procready(p);
-
-  return OK;
+  return ret;
 }
 
 reg_t

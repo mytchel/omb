@@ -27,168 +27,37 @@
 
 #include "head.h"
 
-struct fstransaction {
-  bool served;
-  size_t len;
-  uint32_t rid, type;
-  struct response *resp;
-  struct fstransaction *next;
-  struct proc *proc;
-};
-
 struct cfile {
   struct lock lock;
   struct bindingfid *fid;
+
   uint32_t offset;
 };
 
-static bool
-getresponse(struct binding *b, struct fstransaction *want)
-{
-  if (!want->served) {
-    procwait();
-  }
-
-  return true;
-}
-
-int
-mountproc(void *arg)
-{
-  struct fstransaction *t, *p;
-  struct response tresp;
-  struct binding *b;
-  
-  b = (struct binding *) arg;
-
-  while (b->refs > 1) {
-    if (piperead(b->in, (void *) &tresp, sizeof(tresp)) < 0) {
-      break;
-    }
-
-  findandremove:
-    p = nil;
-    for (t = b->waiting; t != nil; p = t, t = t->next) {
-      if (t->rid != tresp.head.rid) {
-	continue;
-      } else if (p == nil) {
-	if (!cas(&b->waiting, t, t->next)) {
-	  goto findandremove;
-	}
-      } else {
-	if (!cas(&p->next, t, t->next)) {
-	  goto findandremove;
-	}
-      }
-
-      break;
-    }
-
-    if (t == nil) {
-      printf("kproc mount: response %i has no waiter.\n",
-	     tresp.head.rid);
-      break;
-    } 
-
-    memmove(t->resp, &tresp, t->len);
-
-    if (t->type == REQ_read && t->resp->head.ret == OK) {
-      t->resp->read.len = piperead(b->in, t->resp->read.data,
-				   t->resp->read.len);
-
-      if (t->resp->read.len < 0) {
-	printf("kproc mount: error reading read response.\n");
-	break;
-      }
-    }
-
-    t->served = true;
-    procready(t->proc);
-  }
-
-  lock(&b->lock);
-
-  if (b->in != nil) {
-    chanfree(b->in);
-    b->in = nil;
-  }
-
-  if (b->out != nil) {
-    chanfree(b->out);
-    b->out = nil;
-  }
-
-  /* Wake up any waiting processes so they can error. */
-
-  t = b->waiting;
-  while (t != nil) {
-    p = t->next;
-    
-    t->resp->head.ret = ELINK;
-    procready(t->proc);
-
-    t = p;
-  }
-
-  unlock(&b->lock);
-  bindingfree(b);
-
-  return ERR;
-}
-
-static bool
-makereq(struct binding *b,
-	struct request *req, size_t reqlen,
-	struct response *resp, size_t resplen)
-{
-  struct fstransaction trans;
-  
-  if (b->out == nil) {
-    return false;
-  }
-
-  trans.rid = atomicinc(&b->nreqid);
-  trans.type = req->head.type;
-  trans.len = resplen;
-  trans.resp = resp;
-  trans.proc = up;
-  trans.served = false;
-
-  req->head.rid = trans.rid;
-
-  do {
-    trans.next = b->waiting;
-  } while (!cas(&b->waiting, trans.next, &trans));
-  
-  lock(&b->lock);
-
-  if (pipewrite(b->out, (void *) req, reqlen) != reqlen) {
-    unlock(&b->lock);
-    return false;
-  }
-
-  unlock(&b->lock);
-  return getresponse(b, &trans);
-}
+static struct page *
+getfidpage(struct bindingfid *fid, size_t offset, int *r);
 
 void
 bindingfidfree(struct bindingfid *fid)
 {
+  struct request_clunk *req;
   struct bindingfid *p, *o;
-  struct request_clunk req;
-  struct response_clunk resp;
+  uint8_t buf[MESSAGELEN];
+  struct message m;
 
   if (atomicdec(&fid->refs) > 0) {
     return;
   }
 
-  req.head.type = REQ_clunk;
-  req.head.fid = fid->fid;
+  req = (struct request_clunk *) buf;
+  req->head.type = REQ_clunk;
+  req->head.fid = fid->fid;
 
-  makereq(fid->binding,
-	  (struct request *) &req, sizeof(req),
-	  (struct response *) &resp, sizeof(resp));
-
+  m.message = buf;
+  m.reply = buf;
+  
+  kmessage(fid->binding->addr, &m);
+  
   if (fid->parent) {
   remove:
     p = nil;
@@ -219,67 +88,75 @@ bindingfidfree(struct bindingfid *fid)
 static int
 filestatfid(struct bindingfid *fid, struct stat *stat)
 {
-  struct request_stat req;
-  struct response_stat resp;
+  struct response_stat *resp;
+  struct request_stat *req;
+  uint8_t buf[MESSAGELEN];
+  struct message m;
 
-  req.head.type = REQ_stat;
-  req.head.fid = fid->fid;
+  m.message = buf;
+  m.reply = buf;
 
-  if (!makereq(fid->binding,
-	       (struct request *) &req, sizeof(req),
-	       (struct response *) &resp, sizeof(resp))) {
+  req = (struct request_stat *) buf;
+  resp = (struct response_stat *) buf;
+  req->head.type = REQ_stat;
+  req->head.fid = fid->fid;
+
+  if (kmessage(fid->binding->addr, &m) != OK) {
     return ELINK;
-  } else if (resp.head.ret == OK) {
-    memmove(stat, &resp.body.stat, sizeof(struct stat));
+  } else if (resp->head.ret == OK) {
+    memmove(stat, &resp->body.stat, sizeof(struct stat));
     return OK;
   } else {
-    return resp.head.ret;
+    return resp->head.ret;
   }
 }
 
 static struct bindingfid *
-findfileindir(struct bindingfid *fid, char *name, int *err)
+findfileindir(struct bindingfid *fid, char *name, int *ret)
 {
-  struct request_getfid req;
-  struct response_getfid resp;
+  struct response_getfid *resp;
+  struct request_getfid *req;
   struct bindingfid *nfid;
-  size_t len;
+  uint8_t buf[MESSAGELEN];
+  struct message m;
 
   for (nfid = fid->children; nfid != nil; nfid = nfid->cnext) {
     if (strncmp(nfid->name, name, NAMEMAX)) {
       atomicinc(&nfid->refs);
-      *err = OK;
       return nfid;
     }
   }
 
-  req.head.type = REQ_getfid;
-  req.head.fid = fid->fid;
+  m.message = buf;
+  m.reply = buf;
 
-  len = sizeof(req.head);
-  len += strlcpy(req.body.name, name, NAMEMAX);
+  req = (struct request_getfid *) buf;
+  resp = (struct response_getfid *) buf;
+  
+  req->head.type = REQ_getfid;
+  req->head.fid = fid->fid;
 
-  if (!makereq(fid->binding,
-	       (struct request *) &req, len,
-	       (struct response *) &resp, sizeof(resp))) {
-    *err = ELINK;
+  req->body.len = strlcpy(req->body.name, name, NAMEMAX);
+
+  if (kmessage(fid->binding->addr, &m) != OK) {
+    *ret = ELINK;
     return nil;
-  } else if (resp.head.ret != OK) {
-    *err = resp.head.ret;
+  } else if (resp->head.ret != OK) {
+    *ret = resp->head.ret;
     return nil;
   }
 
   nfid = malloc(sizeof(struct bindingfid));
   if (nfid == nil) {
-    *err = ENOMEM;
+    *ret = ENOMEM;
     return nil;
   }
 
   nfid->refs = 1;
   nfid->binding = fid->binding;
 
-  nfid->fid = resp.body.fid;
-  nfid->attr = resp.body.attr;
+  nfid->fid = resp->body.fid;
+  nfid->attr = resp->body.attr;
   strlcpy(nfid->name, name, NAMEMAX);
 
   atomicinc(&fid->refs);
@@ -294,14 +171,12 @@ findfileindir(struct bindingfid *fid, char *name, int *err)
 }
 
 struct bindingfid *
-findfile(struct path *path, int *err)
+findfile(struct path *path, int *ret)
 {
   struct bindingfid *nfid, *fid;
   struct bindingl *b;
   struct path *p;
  
-  *err = OK;
-
   b = ngroupfindbindingl(up->ngroup, up->root);
   if (b == nil) {
     atomicinc(&up->root->refs);
@@ -315,14 +190,14 @@ findfile(struct path *path, int *err)
   while (p != nil) {
     if (!(fid->attr & ATTR_dir)) {
       bindingfidfree(fid);
-      *err = ENOFILE;
+      *ret = ENOFILE;
       return nil;
     }
 
-    nfid = findfileindir(fid, p->s, err);
-    if (*err == ENOCHILD && p->next == nil) {
+    nfid = findfileindir(fid, p->s, ret);
+    if (*ret == ENOCHILD && p->next == nil) {
       return fid;
-    } else if (*err != OK) {
+    } else if (*ret != OK) {
       bindingfidfree(fid);
       return nil;
     }
@@ -350,40 +225,44 @@ findfile(struct path *path, int *err)
 static struct bindingfid *
 filecreate(struct bindingfid *parent,
 	   char *name, uint32_t cattr,
-	   int *err)
+	   int *ret)
 {
-  struct request_create req;
-  struct response_create resp;
+  struct response_create *resp;
+  struct request_create *req;
   struct bindingfid *nfid;
-  size_t len;
+  uint8_t buf[MESSAGELEN];
+  struct message m;
 
-  req.head.type = REQ_create;
-  req.head.fid = parent->fid;
-  req.body.attr = cattr;
+  m.message = buf;
+  m.reply = buf;
 
-  len = sizeof(req.head) + sizeof(req.body.attr);
-  len += strlcpy(req.body.name, name, NAMEMAX);
+  req = (struct request_create *) buf;
+  resp = (struct response_create *) buf;
   
-  if (!makereq(parent->binding,
-	       (struct request *) &req, len,
-	       (struct response *) &resp, sizeof(resp))) {
-    *err = ELINK;
+  req->head.type = REQ_create;
+  req->head.fid = parent->fid;
+
+  req->body.attr = cattr;
+  req->body.len = strlcpy(req->body.name, name, NAMEMAX);
+  
+  if (kmessage(parent->binding->addr, &m) != OK) {
+    *ret = ELINK;
     return nil;
-  } else if (resp.head.ret != OK) {
-    *err = resp.head.ret;
+  } else if (resp->head.ret != OK) {
+    *ret = resp->head.ret;
     return nil;
   } 
 
   nfid = malloc(sizeof(struct bindingfid));
   if (nfid == nil) {
-    *err = ENOMEM;
+    *ret = ENOMEM;
     return nil;
   }
 
   nfid->refs = 1;
   nfid->binding = parent->binding;
 
-  nfid->fid = resp.body.fid;
+  nfid->fid = resp->body.fid;
 
   nfid->attr = cattr;
   strlcpy(nfid->name, name, NAMEMAX);
@@ -396,7 +275,6 @@ filecreate(struct bindingfid *parent,
     nfid->cnext = parent->children;
   } while (!cas(&parent->children, nfid->cnext, nfid));
 
-  *err = OK;
   return nfid;
 }
 
@@ -404,18 +282,19 @@ int
 filestat(struct path *path, struct stat *stat)
 {
   struct bindingfid *fid;
-  int err;
+  int ret;
 
-  fid = findfile(path, &err);
-  if (err != OK) {
-    return err;
+  ret = OK;
+  fid = findfile(path, &ret);
+  if (ret != OK) {
+    return ret;
   }
 
-  err = filestatfid(fid, stat);
+  ret = filestatfid(fid, stat);
 
   bindingfidfree(fid);
 
-  return err;
+  return ret;
 }
 
 static bool
@@ -435,25 +314,27 @@ checkmode(uint32_t attr, uint32_t mode)
 }
 
 struct chan *
-fileopen(struct path *path, uint32_t mode, uint32_t cmode, int *err)
+fileopen(struct path *path, uint32_t mode, uint32_t cmode, int *ret)
 {
   struct bindingfid *fid, *nfid;
-  struct request_open req;
-  struct response_open resp;
+  struct response_open *resp;
+  struct request_open *req;
+  uint8_t buf[MESSAGELEN];
   struct cfile *cfile;
+  struct message m;
   struct chan *c;
   struct path *p;
 
-  fid = findfile(path, err);
-  if (*err != OK) {
+  fid = findfile(path, ret);
+  if (*ret != OK) {
     if (cmode == 0) {
-      if (*err == ENOCHILD || fid == nil) {
-	*err = ENOFILE;
+      if (*ret == ENOCHILD || fid == nil) {
+	*ret = ENOFILE;
       }
       return nil;
     } else if (!(fid->attr & ATTR_wr)) {
       bindingfidfree(fid);
-      *err = EMODE;
+      *ret = EMODE;
       return nil;
     } else {
       /* Create the file first. */
@@ -463,8 +344,9 @@ fileopen(struct path *path, uint32_t mode, uint32_t cmode, int *err)
 	return nil;
       }
 
-      nfid = filecreate(fid, p->s, cmode, err);
-      if (*err != OK) {
+      *ret = OK;
+      nfid = filecreate(fid, p->s, cmode, ret);
+      if (*ret != OK) {
 	bindingfidfree(fid);
 	return nil;
       }
@@ -476,23 +358,27 @@ fileopen(struct path *path, uint32_t mode, uint32_t cmode, int *err)
   }
 
   if (!checkmode(fid->attr, mode)) {
-    *err = EMODE;
+    *ret = EMODE;
     bindingfidfree(fid);
     return nil;
   }
 
-  req.head.type = REQ_open;
-  req.head.fid = fid->fid;
-  req.body.mode = mode;
+  m.message = buf;
+  m.reply = buf;
+
+  req = (struct request_open *) buf;
+  resp = (struct response_open *) buf;
   
-  if (!makereq(fid->binding,
-	       (struct request *) &req, sizeof(req), 
-	       (struct response *) &resp, sizeof(resp))) {
-    *err = ELINK;
+  req->head.type = REQ_open;
+  req->head.fid = fid->fid;
+  req->body.mode = mode;
+  
+  if (kmessage(fid->binding->addr, &m) != OK) {
+    *ret = ELINK;
     bindingfidfree(fid);
     return nil;
-  } else if (resp.head.ret != OK) {
-    *err = resp.head.ret;
+  } else if (resp->head.ret != OK) {
+    *ret = resp->head.ret;
     bindingfidfree(fid);
     return nil;
   }
@@ -500,7 +386,7 @@ fileopen(struct path *path, uint32_t mode, uint32_t cmode, int *err)
   c = channew(CHAN_file, mode);
   if (c == nil) {
     bindingfidfree(fid);
-    *err = ENOMEM;
+    *ret = ENOMEM;
     return nil;
   }
 	
@@ -508,35 +394,29 @@ fileopen(struct path *path, uint32_t mode, uint32_t cmode, int *err)
   if (cfile == nil) {
     bindingfidfree(fid);
     chanfree(c);
-    *err = ENOMEM;
+    *ret = ENOMEM;
     return nil;
   }
 	
   c->aux = cfile;
 
   cfile->fid = fid;
-  cfile->offset = 0;
+  cfile->offset = resp->body.offset;
 
-  if (mode & O_TRUNC) {
-    printf("truincation not yet supported\n");
-  }
-
-  if (mode & O_APPEND) {
-    printf("append not yet supported\n");
-  }
-  
-  *err = OK;
   return c;
 }
 
 int
 fileremove(struct path *path)
 {
+  struct response_remove *resp;
+  struct request_remove *req;
+  uint8_t buf[MESSAGELEN];
   struct bindingfid *fid;
-  struct request_remove req;
-  struct response_remove resp;
+  struct message m;
   int ret;
 
+  req = OK;
   fid = findfile(path, &ret);
   if (ret != OK) {
     return ret;
@@ -545,126 +425,197 @@ fileremove(struct path *path)
   if (fid->refs != 1) {
     return ERR;
   }
-  
-  req.head.type = REQ_remove;
-  req.head.fid = fid->fid;
 
-  if (!makereq(fid->binding,
-	       (struct request *) &req, sizeof(req),
-	       (struct response *) &resp, sizeof(resp))) {
+  m.message = buf;
+  m.reply = buf;
+
+  req = (struct request_remove *) buf;
+  resp = (struct response_remove *) buf;
+  
+  req->head.type = REQ_remove;
+  req->head.fid = fid->fid;
+
+  if (kmessage(fid->binding->addr, &m) != OK) {
     ret = ELINK;
-  } else if (resp.head.ret != OK) {
-    ret =  resp.head.ret;
   } else {
-    ret = OK;
+    ret =  resp->head.ret;
   }
 
   bindingfidfree(fid);
   return ret;
 }
 
+static int
+filebigread(struct cfile *cfile, void *buf, size_t n)
+{
+  size_t l, t, poff;
+  struct page *p;
+  int r;
+  
+  r = OK;
+  l = 0;
+  while (l < n) {
+    poff = PAGE_ALIGN(cfile->offset + l - (PAGE_SIZE - 1));
+
+    p = getfidpage(cfile->fid, poff, &r);
+    if (p == nil) {
+      return r;
+    }
+
+    t = n - l > PAGE_SIZE ? PAGE_SIZE : n - l;
+
+    memmove(buf + l, (void *) (p->pa + (cfile->offset + l - poff)),
+	    t);
+
+    pagefree(p);
+
+    l += t;
+  }
+
+  return l;
+}
+
+static int
+filelittleread(struct cfile *cfile, void *buf, size_t n)
+{
+  struct response_read *resp;
+  struct request_read *req;
+  uint8_t mbuf[MESSAGELEN];
+  struct message m;
+
+  req = (struct request_read *) mbuf;
+  resp = (struct response_read *) mbuf;
+
+  m.message = mbuf;
+  m.reply = mbuf;
+  
+  req->head.type = REQ_read;
+  req->head.fid = cfile->fid->fid;
+  req->body.offset = cfile->offset;
+  req->body.len = n;
+
+  if (kmessage(cfile->fid->binding->addr, &m) != OK) {
+    return ERR;
+  } else if (resp->head.ret == OK) {
+
+    if (resp->body.len > n) {
+      memmove(buf, resp->body.data, n);
+      return n;
+    } else {
+      memmove(buf, resp->body.data, resp->body.len);
+      return resp->body.len;
+    }
+
+  } else {
+    return resp->head.ret;
+  }
+}
+
 int
 fileread(struct chan *c, void *buf, size_t n)
 {
-  struct request_read req;
-  struct response_read resp;
   struct cfile *cfile;
-
+  int r;
+  
   cfile = (struct cfile *) c->aux;
+
   lock(&cfile->lock);
 
-  req.head.fid = cfile->fid->fid;
-  req.head.type = REQ_read;
-  req.body.offset = cfile->offset;
-  req.body.len = n;
-
-  resp.body.len = n;
-  resp.body.data = buf;
-
-  if (!makereq(cfile->fid->binding,
-	       (struct request *) &req, sizeof(req),
-	       (struct response *) &resp, sizeof(resp.head))) {
-    unlock(&cfile->lock);
-    return ELINK;
-  } else if (resp.head.ret != OK) {
-    unlock(&cfile->lock);
-    return resp.head.ret;
+  if (n > WRITEDATAMAX) {
+    r = filebigread(cfile, buf, n);
   } else {
-    cfile->offset += resp.body.len;
-    unlock(&cfile->lock);
-    return resp.body.len;
+    r = filelittleread(cfile, buf, n);
+  }
+
+  if (r > 0) {
+    cfile->offset += r;
+  }
+  
+  unlock(&cfile->lock);
+  return r;
+}
+
+static int
+filebigwrite(struct cfile *cfile, void *buf, size_t n)
+{
+  struct page *p;
+  size_t l, t, poff;
+  int r;
+  
+  r = OK;
+  l = 0;
+  while (l < n) {
+    poff = PAGE_ALIGN(cfile->offset + l - (PAGE_SIZE - 1));
+
+    p = getfidpage(cfile->fid, poff, &r);
+    if (p == nil) {
+      return r;
+    }
+
+    t = n - l > PAGE_SIZE ? PAGE_SIZE : n - l;
+
+    memmove((void *) (p->pa + (cfile->offset + l - poff)),
+	    buf + l, t);
+
+    pagefree(p);
+
+    l += t;
+  }
+
+  return l;
+}
+
+static int
+filelittlewrite(struct cfile *cfile, void *buf, size_t n)
+{
+  struct response_write *resp;
+  struct request_write *req;
+  uint8_t mbuf[MESSAGELEN];
+  struct message m;
+
+  req = (struct request_write *) mbuf;
+  resp = (struct response_write *) mbuf;
+
+  m.message = mbuf;
+  m.reply = mbuf;
+  
+  req->head.type = REQ_write;
+  req->head.fid = cfile->fid->fid;
+  req->body.offset = cfile->offset;
+  req->body.len = n;
+  memmove(req->body.data, buf, n);
+
+  if (kmessage(cfile->fid->binding->addr, &m) != OK) {
+    return ERR;
+  } else if (resp->head.ret == OK) {
+    return resp->body.len;
+  } else {
+    return resp->head.ret;
   }
 }
 
 int
 filewrite(struct chan *c, void *buf, size_t n)
 {
-  struct fstransaction trans;
-  struct request_write req;
-  struct response_write resp;
-  struct binding *b;
   struct cfile *cfile;
-  size_t reqlen;
+  int r;
   
   cfile = (struct cfile *) c->aux;
 
   lock(&cfile->lock);
 
-  b = cfile->fid->binding;
-
-  if (b->out == nil) {
-    unlock(&cfile->lock);
-    return ELINK;
-  }
-
-  trans.len = sizeof(resp);
-  trans.rid = atomicinc(&b->nreqid);
-  trans.type = REQ_write;
-  trans.resp = (struct response *) &resp;
-  trans.proc = up;
-  trans.served = false;
-
-  req.head.rid = trans.rid;
-  req.head.type = REQ_write;
-  req.head.fid = cfile->fid->fid;
-  req.body.offset = cfile->offset;
-  req.body.len = n;
-
-  do {
-    trans.next = b->waiting;
-  } while (!cas(&b->waiting, trans.next, &trans));
- 
-  reqlen = sizeof(req.head)
-    + sizeof(req.body.offset)
-    + sizeof(req.body.len);
-  
-  lock(&b->lock);
-
-  if (pipewrite(b->out, (void *) &req, reqlen) != reqlen) {
-    unlock(&b->lock);
-    unlock(&cfile->lock);
-    return ELINK;
-  }
-  
-  if (pipewrite(b->out, buf, n) < 0) {
-    unlock(&b->lock);
-    unlock(&cfile->lock);
-    return ELINK;
-  }
-
-  unlock(&b->lock);
-
-  if (!getresponse(b, &trans)) {
-    unlock(&cfile->lock);
-    return ELINK;
-  } else if (resp.head.ret != OK) {
-    unlock(&cfile->lock);
-    return resp.head.ret;
+  if (n > WRITEDATAMAX) {
+    r = filebigwrite(cfile, buf, n);
   } else {
-    cfile->offset += resp.body.len;
-    unlock(&cfile->lock);
-    return resp.body.len;
+    r = filelittlewrite(cfile, buf, n);
   }
+
+  if (r > 0) {
+    cfile->offset += r;
+  }
+  
+  unlock(&cfile->lock);
+  return r;
 }
 
 int
@@ -691,113 +642,196 @@ fileseek(struct chan *c, size_t offset, int whence)
   return OK;
 }
 
-struct pagel *
-getfilepages(struct chan *c, size_t offset, size_t len, bool rw)
+static struct page *
+getfidnewpage(struct bindingfid *fid, size_t offset, int *r)
 {
-  return nil;
-  #if 0
-  struct pagel *pages, *po, *pn;
-  struct response_map resp;
-  struct request_map req;
-  struct binding *b;
-  struct cfile *cfile;
-  reg_t off;
+  struct response_map *resp;
+  struct request_map *req;
+  uint8_t buf[MESSAGELEN];
+  struct pagel *po;
+  struct message m;
 
-  printf("getfilepages\n");
+  m.message = buf;
+  m.reply = buf;
+  req = (struct request_map *) buf;
+  resp = (struct response_map *) buf;
   
-  cfile = (struct cfile *) c->aux;
-  lock(&cfile->lock);
+  req->head.fid = fid->fid;
+  req->head.type = REQ_map;
+  req->body.offset = offset;
 
-  req.head.fid = cfile->fid->fid;
-  req.head.type = REQ_map;
-  req.body.offset = offset;
-  req.body.len = len;
-
-  b = cfile->fid->binding;
-  if (!makereq(b,
-	       (struct request *) &req, sizeof(req),
-	       (struct response *) &resp, sizeof(resp))) {
-    unlock(&cfile->lock);
+  if (kmessage(fid->binding->addr, &m) != OK) {
+    *r = ERR;
     return nil;
-  } else if (resp.head.ret != OK) {
-    unlock(&cfile->lock);
+  } else if (resp->head.ret != OK) {
+    *r = resp->head.ret;
     return nil;
   }
 
-  unlock(&cfile->lock);
-
-  printf("now find the pages for 0x%h in proc %i\n", resp.body.addr, b->usrv->pid);
-  
-  off = 0;
-  pages = pn = nil;
-  for (po = b->usrv->mgroup->pages; off < len && po != nil; po = po->next) {
-    printf("looking for 0x%h, have 0x%h\n", resp.body.addr + off, po->va);
-    if (po->va == (reg_t) resp.body.addr + off) {
-      printf("have page at 0x%h\n", po->va);
-      atomicinc(&po->p->refs);
-      if (pn == nil) {
-	pages = pn = wrappage(po->p, off, rw, false);
-      } else {
-	pn->next = wrappage(po->p, off, rw, false);
-	pn = pn->next;
-      }
-
-      off += PAGE_SIZE;
+  for (po = m.replyer->mgroup->pages; po != nil; po = po->next) {
+    if (po->va == (reg_t) resp->body.addr) {
+      return po->p;
     }
   }
 
-  printf("return pages\n");
-  return pages;
-  #endif
+  *r = ERR;
+  return nil;
 }
 
-int
-fileflush(struct chan *c, size_t offset, size_t len)
+static void
+fidpagefree(struct page *p)
 {
-  struct request_map req;
-  struct response_map resp;
-  struct cfile *cfile;
+  struct request_unmap *req;
+  uint8_t buf[MESSAGELEN];
+  struct bindingfid *fid;
+  struct pagel *po, *pp;
+  struct message m;
 
-  cfile = (struct cfile *) c->aux;
-  lock(&cfile->lock);
+  printf("%i is going to unmap a page from a mapped file!!!\n", up->pid);
+  fid = (struct bindingfid *) p->aux;
 
-  req.head.fid = cfile->fid->fid;
-  req.head.type = REQ_flush;
-  req.body.offset = offset;
-  req.body.len = len;
+  m.message = buf;
+  m.reply = buf;
+  req = (struct request_unmap *) buf;
 
-  if (!makereq(cfile->fid->binding,
-	       (struct request *) &req, sizeof(req),
-	       (struct response *) &resp, sizeof(resp))) {
-    unlock(&cfile->lock);
-    return ELINK;
-  } else if (resp.head.ret != OK) {
-    unlock(&cfile->lock);
-    return resp.head.ret;
+  req->head.type = REQ_unmap;
+  req->head.fid = fid->fid;
+
+ retry:
+  pp = nil;
+  for (po = fid->pages; po != nil; pp = po, po = po->next) {
+    if (po->p == p) {
+      printf("found page! va = 0x%h\n", po->va);
+
+      if (pp == nil) {
+	if (!cas(&fid->pages, po, po->next)) {
+	  printf("remove failed\n");
+	  goto retry;
+	}
+      } else if (!cas(&pp->next, po, po->next)) {
+	printf("remove failed\n");
+	goto retry;
+      }
+
+      req->body.offset = po->va;
+      printf("send message\n");
+      kmessage(fid->binding->addr, &m);
+      free(po);
+      break;
+    }
+  }
+}
+
+static struct page *
+getfidpage(struct bindingfid *fid, size_t offset, int *r)
+{
+  struct pagel *pl, *po, *pn;
+  struct page *p;
+
+  for (pl = fid->pages; pl != nil; pl = pl->next) {
+    if (pl->va == offset) {
+      return pl->p;
+    }
   }
 
-  unlock(&cfile->lock);
+  p = getfidnewpage(fid, offset, r);
+  if (*r != OK) {
+    return nil;
+  }
 
-  return ERR;
+  p->aux = fid;
+  p->hook = &fidpagefree;
+  p->hookrefs = atomicinc(&p->refs);
+
+  pn = wrappage(p, offset, true, false);
+
+ retry:
+  po = fid->pages;
+  if (po == nil || po->va > offset) {
+    pn->next = po;
+    if (!cas(&fid->pages, po, pn)) {
+      goto retry;
+    }
+  } else {
+    while (po != nil) {
+      if (po->next == nil || po->next->va > offset) {
+	pn->next = po->next;
+	if (cas(&po->next, pn->next, pn)) {
+	  break;
+	} else {
+	  goto retry;
+	}
+      } else {
+	po = po->next;
+      }
+    }
+  }
+
+  atomicinc(&p->refs);
+  return p;
+}
+
+struct pagel *
+getfilepages(struct chan *c, size_t offset, size_t len, bool rw)
+{
+  struct pagel *pages, *pn;
+  struct cfile *cfile;
+  struct page *p;
+  size_t off;
+  int r;
+
+  cfile = (struct cfile *) c->aux;
+  
+  off = 0;
+  pages = pn = nil;
+  r = OK;
+  
+  while (off < len) {
+    p = getfidpage(cfile->fid, offset + off, &r);
+    if (r != OK) {
+      pagelfree(pages);
+      return nil;
+    }
+
+    if (pn == nil) {
+      pages = pn = wrappage(p, offset + off, rw, false);
+    } else {
+      pn->next = wrappage(p, offset + off, rw, false);
+      pn = pn->next;
+    }
+
+    if (pn == nil) {
+      pagefree(p);
+      pagelfree(pages);
+      return nil;
+    }
+    
+    off += PAGE_SIZE;
+  }
+
+  return pages;
 }
 
 void
 fileclose(struct chan *c)
 {
-  struct request_close req;
-  struct response_close resp;
+  struct request_close *req;
+  uint8_t buf[MESSAGELEN];
   struct cfile *cfile;
+  struct message m;
 
   cfile = (struct cfile *) c->aux;
 
   lock(&cfile->lock);
-  
-  req.head.type = REQ_close;
-  req.head.fid = cfile->fid->fid;
 
-  makereq(cfile->fid->binding,
-	  (struct request *) &req, sizeof(req),
-	  (struct response *) &resp, sizeof(resp));
+  m.message = buf;
+  m.reply = buf;
+  req = (struct request_close *) buf;
+  
+  req->head.type = REQ_close;
+  req->head.fid = cfile->fid->fid;
+
+  kmessage(cfile->fid->binding->addr, &m);
 
   bindingfidfree(cfile->fid);
   free(cfile);

@@ -193,7 +193,7 @@ ngroupfindbindingl(struct ngroup *ngroup, struct bindingfid *fid)
 }
 
 struct binding *
-bindingnew(struct chan *out, struct chan *in, uint32_t rootattr)
+bindingnew(struct addr *addr, uint32_t rootattr)
 {
   struct binding *b;
 	
@@ -215,22 +215,9 @@ bindingnew(struct chan *out, struct chan *in, uint32_t rootattr)
   b->fids->fid = ROOTFID;
   b->fids->attr = rootattr;
 
-  b->refs = 2;
-
-  b->in = in;
-  b->out = out;
-
-  if (in != nil) {
-    atomicinc(&in->refs);
-  }
-  
-  if (out != nil) {
-    atomicinc(&out->refs);
-  }
-
-  b->srv = nil;
-  b->waiting = nil;
-  b->nreqid = 0;
+  b->refs = 1;
+  b->addr = addr;
+  atomicinc(&addr->refs);
 	
   return b;
 }
@@ -238,25 +225,11 @@ bindingnew(struct chan *out, struct chan *in, uint32_t rootattr)
 void
 bindingfree(struct binding *b)
 {
-  if (atomicdec(&b->refs) > 1) {
+  if (atomicdec(&b->refs) > 0) {
     return;
   }
 
-  if (b->in != nil) {
-    chanfree(b->in);
-    b->in = nil;
-  }
-
-  if (b->out != nil) {
-    chanfree(b->out);
-    b->out = nil;
-  }
-  
-  /* There should only be the root binding left, which
-   * bindingfidfree releasing after calling this. */
-
-  if (b->refs == 0) {
-    free(b);
-  }
+  addrfree(b->addr);
+  free(b);
 }
 

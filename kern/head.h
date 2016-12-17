@@ -34,6 +34,8 @@
 #include <fssrv.h>
 #include <string.h>
 
+#include <mach.h>
+
 #ifdef _am335x_
 #include "../am335x/head.h"
 #else
@@ -152,7 +154,11 @@ schedule(void);
 /* Pages and Mgroup and memory */
 
 struct page {
-  unsigned int refs;
+  unsigned int refs, hookrefs;
+  /* Called on page free once refs reaches hookrefs */
+  void (*hook)(struct page *self);
+  void *aux;
+
   /* Not changable */
   reg_t pa;
   bool forceshare;
@@ -194,7 +200,6 @@ mgroupcopy(struct mgroup *old);
 void
 mgroupfree(struct mgroup *m);
 
-
 bool
 fixfault(void *);
 
@@ -213,10 +218,10 @@ struct pagel *
 getiopages(void *addr, size_t len, bool rw);
 
 void *
-insertpages(struct mgroup *m, struct pagel *pagel, size_t size);
+insertpages(struct pagel **head, struct pagel *p, size_t size);
 
 void
-insertpagesfixed(struct mgroup *m, struct pagel *pagel, size_t size);
+insertpagesfixed(struct pagel **head, struct pagel *p, size_t size);
 
 
 /* Channels */
@@ -296,15 +301,7 @@ fdtochan(struct fgroup *, int);
   
 struct binding {
   unsigned int refs;
-  struct lock lock;
-	
-  struct chan *in, *out;
-
-  uint32_t nreqid;
-  struct fstransaction *waiting;
-
-  struct proc *srv; /* Kernel proc that handles responses */
-
+  struct addr *addr;
   struct bindingfid *fids;
 };
 
@@ -333,7 +330,7 @@ struct ngroup *
 ngroupcopy(struct ngroup *);
 
 struct binding *
-bindingnew(struct chan *wr, struct chan *rd, uint32_t rootattr);
+bindingnew(struct addr *addr, uint32_t rootattr);
 
 void
 bindingfree(struct binding *);
@@ -355,17 +352,19 @@ ngroupremovebinding(struct ngroup *n, struct bindingfid *fid);
 struct bindingfid {
   unsigned int refs;
   
-  uint32_t fid, attr;
+  uint32_t fid;
+  uint32_t attr;
+  uint32_t len;
+
   char name[NAMEMAX];
+
+  struct pagel *pages;
 
   struct binding *binding;
   struct bindingfid *parent;
   struct bindingfid *children;
   struct bindingfid *cnext;
 };
-
-int
-mountproc(void *);
 
 bool
 pipenew(struct chan **rd, struct chan **wr);
@@ -409,8 +408,9 @@ getfilepages(struct chan *c, size_t offset, size_t len, bool rw);
 /* Messages and agroup */
 
 struct message {
-  struct proc *sender, *replyer;
   void *message, *reply;
+
+  struct proc *sender, *replyer;
   uint32_t mid;
   int ret;
   struct message *next;

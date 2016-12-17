@@ -65,7 +65,7 @@ addpages(struct mgroup *m, reg_t addr, size_t size, bool rw)
     s += PAGE_SIZE;
   }
 
-  insertpagesfixed(m, head, s);
+  insertpagesfixed(&m->pages, head, s);
   return OK;
 }
 

@@ -34,6 +34,7 @@
 #define ATTR_rd		(1<<0)
 #define ATTR_wr		(1<<1)
 #define ATTR_dir	(1<<2)
+#define ATTR_appendonly	(1<<3)
 
 struct stat {
   uint32_t attr;
@@ -46,9 +47,6 @@ stat(const char *path, struct stat *stat);
 
 int
 cleanpath(char *opath, char *cpath, size_t cpathlen);
-
-int
-mount(int out, int in, const char *path, uint32_t attr);
 
 int
 bind(const char *old, const char *new);

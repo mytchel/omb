@@ -53,6 +53,12 @@ struct mbr {
   uint8_t bootsignature[2];
 };
 
+struct block {
+  uint32_t blk, nblk;
+  uint8_t *buf;
+  struct block *next;
+};
+
 struct partition {
   uint8_t type;
   
@@ -63,6 +69,7 @@ struct partition {
 
   uint32_t lba, sectors;
 
+  struct block *blocks;
   struct mbrpartition *mbr;
 };
 
@@ -77,7 +84,8 @@ static struct blkdevice *device = nil;
 static char path[1024];
 
 static struct mbr mbr;
-struct partition parts[4], raw;
+struct partition raw;
+struct partition parts[4];
 
 static void
 initpart(struct partition *p, char *name)
@@ -98,6 +106,7 @@ initparts(void)
 
     parts[i].mbr = &mbr.parts[i];
     parts[i].type = 0;
+    parts[i].blocks = nil;
   }
 
   initpart(&raw, "raw");
@@ -108,6 +117,7 @@ initparts(void)
   raw.lba = 0;
   raw.sectors = device->nblk;
   raw.mbr = nil;
+  raw.blocks = nil;
 }
 
 static void
@@ -237,6 +247,7 @@ static void
 bopen(struct request_open *req, struct response_open *resp)
 {
   resp->head.ret = OK;
+  resp->body.offset = 0;
 }
 
 static void
@@ -247,7 +258,7 @@ bclose(struct request_close *req, struct response_close *resp)
 
 static void
 readroot(struct request_read *req, struct response_read *resp,
-	  uint32_t offset, uint32_t len)
+	 uint32_t offset, uint32_t len)
 {
   if (offset + len >= rootstat.dsize) {
     len = rootstat.dsize - offset;
@@ -262,86 +273,149 @@ readroot(struct request_read *req, struct response_read *resp,
 }
 
 static void
-readblocks(struct request_read *req, struct response_read *resp,
-	    struct partition *part,
-	    uint32_t blk, uint32_t nblk)
-{
-  uint8_t *buf;
-  uint32_t i;
-
-  buf = resp->body.data;
-
-  i = 0;
-  while (i < nblk && part->lba + blk + i < part->sectors) {
-    if (!device->read(part->lba + blk + i, buf)) {
-      resp->head.ret = ERR;
-      resp->body.len = 0;
-      return;
-    }
-    
-    buf += device->blksize;
-    i++;
-  }
-
-  resp->body.len = i * device->blksize;
-  resp->head.ret = OK;
-}
-
-static void
 bread(struct request_read *req, struct response_read *resp)
 {
-  struct partition *part;
-
   if (req->head.fid == ROOTFID) {
     readroot(req, resp, req->body.offset, req->body.len);
   } else {
-    part = fidtopart(req->head.fid);
-    readblocks(req, resp, part,
-	       req->body.offset / device->blksize,
-	       req->body.len / device->blksize);
+    resp->head.ret = ERR;
   }
 }
 
 static void
-writeblocks(struct request_write *req, struct response_write *resp,
-	    struct partition *part,
-	    uint32_t blk, uint32_t nblk)
+bmap(struct request_map *req, struct response_map *resp)
 {
-  uint8_t *buf;
-  uint32_t i;
-
-  buf = req->body.data;
-
-  resp->head.ret = OK;
-  
-  for (i = 0; i < nblk && part->lba + blk + i < part->sectors; i++) {
-    if (!device->write(part->lba + blk + i, buf)) {
-      resp->head.ret = ERR;
-      break;
-    }
-    
-    buf += device->blksize;
-  }
-
-  resp->body.len = i * device->blksize;
-}
-
-static void
-bwrite(struct request_write *req, struct response_write *resp)
-{
+  struct block *n, *prev, *next;
   struct partition *part;
+  uint32_t i, blk;
+
+  if (req->head.fid == ROOTFID) {
+    resp->head.ret= ERR;
+    return;
+  }
 
   part = fidtopart(req->head.fid);
-
-  if (req->body.offset % device->blksize != 0) {
-    resp->head.ret = ENOIMPL;
-  } else if (req->body.len % device->blksize != 0) {
-    resp->head.ret = ENOIMPL;
+  if (part == nil) {
+    resp->head.ret = ERR;
+    return;
   }
 
-  writeblocks(req, resp, part,
-	      req->body.offset / device->blksize,
-	      req->body.len / device->blksize);
+  blk = req->body.offset / device->blksize;
+
+  next = nil;
+  prev = part->blocks;
+  while (prev != nil) {
+    if (prev->blk > blk) {
+      next = prev;
+      prev = nil;
+      break;
+    } else if (prev->next == nil || prev->next->blk > blk) {
+      next = prev->next;
+      break;
+    } else {
+      prev = prev->next;
+    }
+  }
+
+  n = malloc(sizeof(struct block));
+  if (n == nil) {
+    /* Probably not the best way to handle this. */
+    resp->head.ret = ENOMEM;
+    return;
+  }
+   
+  n->blk = blk;
+  n->nblk = PAGE_SIZE / device->blksize;
+
+  printf("%s mapping from block %i to %i\n", device->name, part->lba + n->blk, part->lba + n->blk + n->nblk);
+
+  n->buf = mmap(MEM_ram|MEM_rw, PAGE_SIZE, 0, 0, nil);
+  if (n->buf == nil) {
+    resp->head.ret = ENOMEM;
+    free(n);
+    return;
+  }
+
+  for (i = 0; i < n->nblk && n->blk + i < part->sectors; i++) {
+    printf("%s reading block %i!\n", device->name,
+	   part->lba + n->blk + i);
+    if (!device->read(part->lba + n->blk + i,
+		      &n->buf[i * device->blksize])) {
+      printf("%s error reading block %i!\n", device->name,
+	     part->lba + n->blk + i);
+      munmap(n->buf, PAGE_SIZE);
+      free(n);
+      resp->head.ret = ERR;
+      return;
+    }
+  }
+
+  n->next = next;
+  if (prev == nil) {
+    part->blocks = n;
+  } else {
+    prev->next = n;
+  }
+ 
+  n->nblk = i;
+  
+  resp->body.addr = n->buf;
+  resp->head.ret = OK;
+}
+
+static void
+bunmap(struct request_unmap *req, struct response_unmap *resp)
+{
+  struct block *n, *prev;
+  struct partition *part;
+  uint32_t i, blk;
+
+  printf("%s unmapping page %i\n", device->name, req->body.offset);
+  
+  if (req->head.fid == ROOTFID) {
+    resp->head.ret= ERR;
+    return;
+  }
+
+  part = fidtopart(req->head.fid);
+  if (part == nil) {
+    resp->head.ret = ERR;
+    return;
+  }
+
+  blk = req->body.offset / device->blksize;
+
+  prev = nil;
+  for (n = part->blocks; n != nil; n = n->next) {
+    if (n->blk != blk) continue;
+    break;
+  }
+
+  if (n == nil) {
+    resp->head.ret = ERR;
+    return;
+  }
+  
+  if (prev == nil) {
+    part->blocks = n->next;
+  } else {
+    prev->next = n->next;
+  }
+    
+  for (i = 0; i < n->nblk; i++) {
+    printf("%s writing block %i!\n", device->name,
+	   part->lba + n->blk + i);
+    if (!device->write(part->lba + n->blk + i,
+		       &n->buf[i * device->blksize])) {
+      printf("%s error writing block %i!\n", device->name,
+	     part->lba + n->blk + i);
+    }
+  }
+
+  munmap(n->buf, PAGE_SIZE);
+  free(n);
+ 
+  resp->head.ret = OK;
 }
 
 static struct fsmount fsmount = {
@@ -350,14 +424,15 @@ static struct fsmount fsmount = {
   .stat = &bstat,
   .open = &bopen,
   .close = &bclose,
+  .map = &bmap,
+  .unmap = &bunmap,
   .read = &bread,
-  .write = &bwrite,
 };
 
 int
 mbrmount(struct blkdevice *d, uint8_t *dir)
 {
-  int p1[2], p2[2], fd;
+  int addr, fd;
 
   device = d;
   snprintf(path, sizeof(path), "%s/%s", dir, device->name);
@@ -371,22 +446,15 @@ mbrmount(struct blkdevice *d, uint8_t *dir)
     return -1;
   }
 
-  if (pipe(p1) == ERR) {
-    return -2;
-  } else if (pipe(p2) == ERR) {
-    return -2;
+  addr = serv();
+  if (addr < 0) {
+    return addr;
   }
 
-  if (mount(p1[1], p2[0], path, ATTR_rd|ATTR_dir) == ERR) {
+  if (mount(addr, path, ATTR_rd|ATTR_dir) == ERR) {
     return -3;
   }
 
-  close(p1[1]);
-  close(p2[0]);
-
-  fsmount.databuf = malloc(device->blksize * 4);
-  fsmount.buflen = device->blksize * 4;
-
-  return fsmountloop(p1[0], p2[1], &fsmount);
+  return fsmountloop(addr, &fsmount);
 }
 

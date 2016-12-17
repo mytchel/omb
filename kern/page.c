@@ -30,10 +30,19 @@
 void
 pagefree(struct page *p)
 {
-  if (atomicdec(&p->refs) > 0) {
+  unsigned int r;
+
+  printf("pagefree 0x%h from refs = %i\n", p, p->refs);
+  r = atomicdec(&p->refs);
+
+  if (r == p->hookrefs && p->hook != nil) {
+    p->hook(p);
+  } else if (r > 0) {
     return;
   }
 
+  p->hookrefs = 0;
+  p->hook = nil;
   p->next = *p->from;
   *(p->from) = p;
 }
@@ -94,6 +103,25 @@ mgroupcopy(struct mgroup *old)
 }
 
 struct pagel *
+wrappage(struct page *p, reg_t va, bool rw, bool c)
+{
+  struct pagel *pl;
+
+  pl = malloc(sizeof(struct pagel));
+  if (pl == nil) {
+    return nil;
+  }
+
+  pl->p = p;
+  pl->va = va;
+  pl->rw = rw;
+  pl->c = c;
+  pl->next = nil;
+
+  return pl;
+}
+
+struct pagel *
 pagelcopy(struct pagel *po)
 {
   struct pagel *new, *pn, *pp;
@@ -134,25 +162,6 @@ err:
   pagelfree(new);
 
   return nil;
-}
-
-struct pagel *
-wrappage(struct page *p, reg_t va, bool rw, bool c)
-{
-  struct pagel *pl;
-
-  pl = malloc(sizeof(struct pagel));
-  if (pl == nil) {
-    return nil;
-  }
-
-  pl->p = p;
-  pl->va = va;
-  pl->rw = rw;
-  pl->c = c;
-  pl->next = nil;
-
-  return pl;
 }
 
 static struct pagel *
@@ -310,53 +319,46 @@ fixaddresses(struct pagel *p, struct pagel *next, reg_t addr)
 }
 
 void *
-insertpages(struct mgroup *m, struct pagel *pn, size_t size)
+insertpages(struct pagel **head, struct pagel *pn, size_t size)
 {
-  struct pagel *p;
+  struct pagel *p, *n;
   reg_t addr;
 
-  lock(&m->lock);
-
-  if (m->pages == nil) {
+ retry:
+  
+  if (*head == nil) {
     fixaddresses(pn, nil, nil);
-    m->pages = pn;
-    unlock(&m->lock);
-    return nil;
+    if (cas(head, nil, pn)) {
+      return nil;
+    } else {
+      goto retry;
+    }
   }
   
-  for (p = m->pages; p != nil && pn != nil; p = p->next) {
-    if (p->next == nil ||
-	p->va + PAGE_SIZE + size <= p->next->va) {
-
+  for (p = *head; p != nil && pn != nil; p = p->next) {
+    n = p->next;
+    if (n == nil || p->va + PAGE_SIZE + size <= n->va) {
       addr = p->va + PAGE_SIZE;
-
-      fixaddresses(pn, p->next, addr);
-      p->next = pn;
       
-      unlock(&m->lock);
+      fixaddresses(pn, n, addr);
+      if (!cas(&p->next, n, pn)) {
+	goto retry;
+      }
+      
       return (void *) addr;
     }
   }
 
-  unlock(&m->lock);
   return nil;
 }
 
 void
-insertpagesfixed(struct mgroup *m, struct pagel *pn, size_t size)
+insertpagesfixed(struct pagel **head, struct pagel *pn, size_t size)
 {
   struct pagel *p, *pp, *t;
 
-  lock(&m->lock);
-
-  if (m->pages == nil) {
-    m->pages = pn;
-    unlock(&m->lock);
-    return;
-  }
-
   pp = nil;
-  p = m->pages;
+  p = *head;
   while (p != nil) {
     t = p->next;
 
@@ -365,10 +367,10 @@ insertpagesfixed(struct mgroup *m, struct pagel *pn, size_t size)
 
       if (pp == nil) {
 	pp = pn->next;
-	m->pages = pn;
+	*head = pn;
 	pn->next = p->next;
 	pn = pp;
-	pp = m->pages;
+	pp = *head;
       } else {
 	pp->next = pn;
 	pn = pn->next;
@@ -385,13 +387,11 @@ insertpagesfixed(struct mgroup *m, struct pagel *pn, size_t size)
 
   if (pn != nil) {
     if (pp == nil) {
-      m->pages = pn;
+      *head = pn;
     } else {
       pp->next = pn;
     }
   }
-
-  unlock(&m->lock);
 }
 
 struct pagel *

@@ -76,6 +76,7 @@ static void
 bopen(struct request_open *req, struct response_open *resp)
 {
   resp->head.ret = OK;
+  resp->body.offset = 0;
 }
 
 static void
@@ -84,6 +85,7 @@ bclose(struct request_close *req, struct response_close *resp)
   resp->head.ret = OK;
 }
 
+#if 0
 static void
 bread(struct request_read *req, struct response_read *resp)
 {
@@ -112,6 +114,8 @@ bwrite(struct request_write *req, struct response_write *resp)
 		  req->body.offset, req->body.len,
 		  &resp->head.ret);
 }
+
+#endif
 
 static void
 bcreate(struct request_create *req, struct response_create *resp)
@@ -143,14 +147,12 @@ static struct fsmount fsmount = {
   .close = &bclose,
   .create = &bcreate,
   .remove = &bremove,
-  .read = &bread,
-  .write = &bwrite,
 };
 
 int
 mountfat(char *device, char *dir)
 {
-  int p1[2], p2[3], fddev, fddir, i;
+  int addr, fddev, fddir, i;
 
   fddev = open(device, O_RDWR);
   if (fddev < 0) {
@@ -170,53 +172,36 @@ mountfat(char *device, char *dir)
     close(fddir);
     return ERR;
   }
-  
-  if (pipe(p1) == ERR) {
-    printf("pipe failed\n");
-    close(fddev);
-    close(fddir);
-    return ERR;
-  } else if (pipe(p2) == ERR) {
-    printf("pipe failed\n");
-    close(fddev);
-    close(fddir);
-    return ERR;
-  }
 
-  if (mount(p1[1], p2[0], dir, ATTR_rd|ATTR_wr|ATTR_dir) == ERR) {
+  addr = serv();
+  if (addr < 0) {
+    printf("serv failed!\n");
+    close(fddev);
+    close(fddir);
+    return ERR;
+  } 
+
+  if (mount(addr, dir, ATTR_rd|ATTR_wr|ATTR_dir) == ERR) {
     printf("failed to mount to %s\n", dir);
     close(fddev);
     close(fddir);
+    unserv(addr);
     return ERR;
   }
 
-  close(p1[1]);
-  close(p2[0]);
-
   i = fork(FORK_proc);
   if (i != 0) {
-    close(p1[0]);
-    close(p2[1]);
+    unserv(addr);
     close(fddir);
     close(fddev);
     return 0;
   }
-
-  fsmount.buflen = fat->bps * fat->spc * 4;
-  fsmount.databuf = mmap(MEM_ram|MEM_rw, fsmount.buflen, 0, 0, nil);
-
-  if (fsmount.databuf == nil) {
-    printf("mountfat failed to alloc data buf.\n");
-    exit(ENOMEM);
-  }
-  
-  i = fsmountloop(p1[0], p2[1], &fsmount);
+ 
+  i = fsmountloop(addr, &fsmount);
 
   printf("fat mount for %s on %s exiting with %i\n",
 	 device, dir, i);
   
-  free(fsmount.databuf);
-
   close(fddev);
   close(fddir);
    

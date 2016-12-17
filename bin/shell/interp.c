@@ -85,6 +85,8 @@ interp(void)
 	goto prompt;
       }
 
+      write(STDOUT, &c, sizeof(char));
+      
       line[i] = c;
       i++;
 

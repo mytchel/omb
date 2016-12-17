@@ -35,9 +35,9 @@
 static volatile struct gpio_regs *regs = nil;
 
 static struct stat rootstat = {
-  ATTR_wr|ATTR_rd,
+  ATTR_wr|ATTR_rd|ATTR_appendonly,
   0,
-  GPIO_LEN,
+  0,
 };
 
 static void
@@ -62,17 +62,19 @@ bclose(struct request_close *req, struct response_close *resp)
 static void
 bmap(struct request_map *req, struct response_map *resp)
 {
-  printf("gpio map from %i, len %i\n", req->body.offset, req->body.len);
-  
-  if (req->body.offset != 0 || req->body.len != GPIO_LEN) {
-    printf("bad offset or len\n");
+  if (req->body.offset != 0) {
     resp->head.ret = ERR;
     return;
   }
 
   resp->body.addr = (void *) regs;
   resp->head.ret = OK;
-  printf("ok, addr = 0x%h\n", resp->body.addr);
+}
+
+static void
+bunmap(struct request_unmap *req, struct response_unmap *resp)
+{
+
 }
 
 /* Read format is 
@@ -180,25 +182,24 @@ bwrite(struct request_write *req, struct response_write *resp)
   resp->body.len = len;
   resp->head.ret = OK;
 }
- 
+
 static struct fsmount fsmount = {
   .stat = &bstat,
   .open = &bopen,
   .close = &bclose,
   .map = &bmap,
+  .unmap = &bunmap,
   .read = &bread,
   .write = &bwrite,
 };
 
 int
-gpiomount(char *path, uint32_t addr)
+gpiomount(char *path, uint32_t regaddr)
 {
-  int f, fd, p1[2], p2[2];
-  size_t size = GPIO_LEN;
+  int f, fd, addr;
 
-  if (pipe(p1) == ERR) {
-    return -1;
-  } else if (pipe(p2) == ERR) {
+  addr = serv();
+  if (addr < 0) {
     return -1;
   }
 
@@ -207,38 +208,30 @@ gpiomount(char *path, uint32_t addr)
     return -2;
   }
 
-  if (mount(p1[1], p2[0], path, rootstat.attr) == ERR) {
+  if (mount(addr, path, rootstat.attr) == ERR) {
     return -3;
   }
 
   close(fd);
-  close(p1[1]);
-  close(p2[0]);
 
   f = fork(FORK_proc);
   if (f > 0) {
-    close(p1[0]);
-    close(p2[1]);
+    unserv(addr);
     close(fd);
     return f;
   }
 
   regs = (struct gpio_regs *)
-    mmap(MEM_io|MEM_rw, size, 0, 0, (void *) addr);
+    mmap(MEM_io|MEM_rw, GPIO_LEN, 0, 0, (void *) regaddr);
 
   if (regs == nil) {
     exit(-4);
   }
 
-  fsmount.databuf = malloc(512);
-  fsmount.buflen = 512;
-  
-  f = fsmountloop(p1[0], p2[1], &fsmount);
+  f = fsmountloop(addr,  &fsmount);
 
   printf("gpio mount on %s exiting with %i\n", path, f);
 
-  free(fsmount.databuf);
-  
   exit(f);
 }
 

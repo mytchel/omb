@@ -105,6 +105,7 @@ bopen(struct request_open *req, struct response_open *resp)
 {
   fids[req->head.fid]->open++;
   resp->head.ret = OK;
+  resp->body.offset = 0;
 }
 
 static void
@@ -189,6 +190,8 @@ bremove(struct request_remove *req, struct response_remove *resp)
   resp->head.ret = OK;
 }
 
+#if 0
+
 static void
 breaddir(struct request_read *req, struct response_read *resp,
 	 struct file *file)
@@ -254,6 +257,8 @@ bread(struct request_read *req, struct response_read *resp)
   }
 }
 
+#endif
+
 static struct fsmount rootmount = {
   .getfid = &bgetfid,
   .clunk = &bclunk,
@@ -262,36 +267,28 @@ static struct fsmount rootmount = {
   .close = &bclose,
   .create = &bcreate,
   .remove = &bremove,
-  .read = &bread,
 };
   
 int
 rootfs(void)
 {
-  int r, p1[2], p2[2];
+  int r, addr;
 
-  if (pipe(p1) != OK) {
+  addr = serv();
+  if (addr < 0) {
+    return addr;
+  }
+  
+  if (mount(addr, "/", ATTR_rd|ATTR_wr|ATTR_dir) != OK) {
     return ERR;
   }
-
-  if (pipe(p2) != OK) {
-    return ERR;
-  }
-
-  if (mount(p1[1], p2[0], "/", ATTR_rd|ATTR_wr|ATTR_dir) != OK) {
-    return ERR;
-  }
-
-  close(p1[1]);
-  close(p2[0]);
 
   r = fork(FORK_proc|FORK_cngroup);
   if (r < 0) {
     printf("error forking for rootfs : %i\n", r);
     return r;
   } else if (r > 0) {
-    close(p1[0]);
-    close(p2[1]);
+    unserv(addr);
     return r;
   }
   
@@ -312,10 +309,7 @@ rootfs(void)
 
   fids[ROOTFID] = root;
   
-  rootmount.buflen = 4096;
-  rootmount.databuf = malloc(rootmount.buflen);
-
-  r = fsmountloop(p1[0], p2[1], &rootmount);
+  r = fsmountloop(addr, &rootmount);
 
   printf("root fs exiting with %i!\n", r);
   exit(r);

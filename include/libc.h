@@ -30,18 +30,26 @@
 
 #include <types.h>
 #include <err.h>
+#include <mach.h>
 
 int
 exit(int code) __attribute__((noreturn));
 
 /* Should process aspects be (c)opied, created a(n)ew, or shared. */
 
+#define FORK_smem	(0<<0)
 #define FORK_cmem	(1<<0)
-#define FORK_nmem	(3<<0) /* This will never work */
+#define FORK_nmem	(3<<0) /* This will always cause an error. */
+
+#define FORK_sfgroup	(0<<2)
 #define FORK_cfgroup	(1<<2)
 #define FORK_nfgroup	(3<<2)
+
+#define FORK_sngroup	(0<<4)
 #define FORK_cngroup	(1<<4)
 #define FORK_nngroup	(3<<4)
+
+#define FORK_sagroup	(0<<6)
 #define FORK_cagroup	(1<<6)
 #define FORK_nagroup	(3<<6)
 
@@ -74,7 +82,7 @@ waitintr(int intr);
 #define MESSAGELEN 512
 
 /* Returns an addr for unserv, message, recv, and reply or 
- * and error.
+ * and error
  */
 int serv(void);
 
@@ -160,10 +168,10 @@ cas2(void *addr1, void *addr2,
      void *old1, void *old2,
      void *new1, void *new2);
 
-int
+unsigned int
 atomicinc(unsigned int *addr);
 
-int
+unsigned int
 atomicdec(unsigned int *addr);
 
 #endif
