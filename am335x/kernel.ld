@@ -34,14 +34,6 @@ SECTIONS
 	. = . + 0x100;
 	_ex_stack_top = .;
 
-
-	.heap ALIGN(4096) :
-	{
-	      _heap_start = .;
-	      . = . + 0x10000;
-	      _heap_end = .;
-	 }	
-
 	_kernel_end = .;
 
 	. = 0xa0000000;

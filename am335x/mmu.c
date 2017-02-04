@@ -25,7 +25,7 @@
  *
  */
 
-#include "../kern/head.h"
+#include <head.h>
 #include "fns.h"
 
 #define L1X(va)		(va >> 20)
@@ -48,8 +48,6 @@ ttb[4096]__attribute__((__aligned__(16*1024))) = { L1_FAULT };
 
 uint32_t low = UINT_MAX;
 uint32_t high = 0;
-
-struct mmu *loaded = nil;
 
 void
 mmuinit(void)
@@ -79,55 +77,6 @@ mmuempty1(void)
   high = 0;
 }
 
-struct mmu *
-mmunew(void)
-{
-  struct mmu *m;
-
-  m = malloc(sizeof(struct mmu));
-  m->pages = nil;
-
-  return m;
-}
-
-void
-mmufree(struct mmu *m)
-{
-  pagelfree(m->pages);
-  free(m);
-}
-
-void
-mmuswitch(struct mmu *n)
-{
-  struct pagel *pl;
-
-  if (loaded == n) {
-    return;
-  }
-
-  mmuempty1();
-
-  loaded = n;
-
-  if (loaded->pages == nil) {
-    return;
-  }
-  
-  low = L1X((uint32_t) loaded->pages->va);
-  
-  for (pl = loaded->pages; pl != nil; pl = pl->next) {
-    ttb[L1X((uint32_t) pl->va)] 
-      = ((uint32_t) pl->p->pa) | L1_COARSE;
-
-    if (L1X((uint32_t) pl->va) > high) {
-      high = L1X((uint32_t) pl->va);
-    } else if (L1X((uint32_t) pl->va) < low) {
-      low = L1X((uint32_t) pl->va);
-    }
-  }
-}
-
 void
 imap(void *start, void *end, int ap, bool cachable)
 {
@@ -149,71 +98,4 @@ imap(void *start, void *end, int ap, bool cachable)
     ttb[L1X(x)] = x | mask;
     x += 1 << 20;
   }
-}
-
-void
-mmuputpage(struct pagel *p)
-{
-  struct pagel *pn;
-  struct page *pg;
-  uint32_t i;
-  uint32_t tex, ap, c, b;
-  uint32_t *l1, *l2;
-
-  uint32_t x = (uint32_t) p->va;
-
-  l1 = &ttb[L1X(x)];
-	
-  /* Add a l1 page if needed. */
-  if (*l1  == L1_FAULT) {
-     if (L1X(x) > high) {
-      high = L1X(x);
-    } else if (L1X(x) < low) {
-      low = L1X(x);
-    }
-
-     pg = getrampage();
-    if (pg == nil) {
-      panic("mmu failed to get page\n");
-    }
-    
-    pn = wrappage(pg, (x & ~((1 << 20) - 1)),
-		  true, true);
-
-    if (pn == nil) {
-      panic("mmu failed to wrap page\n");
-    }
- 
-    pn->next = up->mmu->pages;
-    up->mmu->pages = pn;
-
-    for (i = 0; i < 256; i++) {
-      ((uint32_t *) pg->pa)[i] = L2_FAULT;
-    }
-	
-    *l1 = ((uint32_t) pg->pa) | L1_COARSE;
-  }
-	
-  l2 = (uint32_t *) (*l1 & ~((1 << 10) - 1));
-
-  if (p->rw) {
-    ap = AP_RW_RW;
-  } else {
-    ap = AP_RW_RO;
-  }
-  
-  if (p->c) {
-    tex = 7;
-    c = 1;
-    b = 0;
-  } else {
-    tex = 0;
-    c = 0;
-    b = 1;
-  }
-  
-  l2[L2X(x)] = ((uint32_t) p->p->pa) | L2_SMALL | 
-    (tex << 6) | (ap << 4) | (c << 3) | (b << 2);
-	
-  mmuinvalidate();
 }

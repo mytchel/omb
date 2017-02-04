@@ -28,8 +28,6 @@
 #ifndef _FNS_H_
 #define _FNS_H_
 
-#include "trap.h"
-
 #define readl(a)	(*(volatile uint32_t*)(a))
 #define readw(a)	(*(volatile uint16_t*)(a))
 #define readb(a)	(*(volatile uint8_t*)(a))
@@ -54,6 +52,9 @@ faultaddr(void);
 
 void
 intcaddhandler(uint32_t, void (*)(uint32_t));
+
+void
+intcreset(void);
 
 void
 cachedisable(void);
@@ -101,5 +102,14 @@ watchdoginit(void);
 
 void
 timersinit(void);
+
+void
+memprocinit(void);
+
+void
+mainprocinit(void);
+
+struct page *
+getrampage(void);
 
 #endif

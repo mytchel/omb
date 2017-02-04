@@ -32,12 +32,21 @@ static int
 mainprocfunc(void *arg)
 {
   uint8_t buf[] = "This is a test.";
-  size_t len = 1;
-  int r;
+  size_t len = 32;
+  int i = 0;
   
   while (true) {
-    r = ksend(0, buf, len++);
-    printf("main sent message of len %i, got %i\n", len, r);
+    if (ksend(0, buf, len) != OK) {
+      continue;
+    }
+
+    if (i > 50) {
+      len = (len + 64) % 4096;
+      printf("bumping len up to %i\n", len);
+      i = 0;
+    } else {
+      i++;
+    }
   }
 
   return OK;

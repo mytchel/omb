@@ -53,3 +53,14 @@ struct mmu {
 };
 
 #include "../../kern/head.h"
+
+typedef enum {
+  PAGE_ram,
+  PAGE_io,
+} page_t;
+
+struct pageholder {
+  struct page p;
+  page_t type;
+  struct pageholder *next;
+};

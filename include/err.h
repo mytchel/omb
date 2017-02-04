@@ -28,22 +28,8 @@
 #ifndef _ERR_H_
 #define _ERR_H_
 
-#define OK		0
+#define OK		 0
 /* General error */
 #define ERR		-1
-/* Pipe connection closed somewhere along the line. */
-#define ELINK		-2
-/* Pipe/File mode wrong for operation. */
-#define EMODE		-3
-/* No such file. */
-#define ENOFILE		-4
-/* Function not implimented */
-#define ENOIMPL		-5
-/* No memory */
-#define ENOMEM		-6
-/* For file systems, no child with that name found. */
-#define ENOCHILD        -7
-/* Directory not empty */
-#define ENOTEMPTY       -8
 
 #endif

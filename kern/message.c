@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2016 Mytchel Hammond <mytchel@openmailbox.org>
+ * Copyright (c) 2017 Mytchel Hammond <mytchel@openmailbox.org>
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -25,209 +25,156 @@
  *
  */
 
-#include "head.h"
+#include <head.h>
 
-struct agroup *
-agroupnew(size_t max)
+struct mbox *
+mboxnew(struct page *page)
 {
-  struct agroup *g;
+  struct message *mm;
+  struct mbox *m;
 
-  g = malloc(sizeof(struct agroup));
-  if (g == nil) {
-    return nil;
-  }
+  m = (struct mbox *) page->pa;
+  m->page = page;
+  m->head = 0;
+  m->tail = 0;
 
-  g->refs = 1;
-  g->naddrs = max;
+  m->messages = (struct message **) (page->pa + sizeof(struct mbox));
+  m->mlen = PAGE_SIZE / 4 / sizeof(struct message);
 
-  g->addrs = malloc(sizeof(struct addr *) * max);
-  if (g->addrs == nil) {
-    free(g);
-    return nil;
-  }
-  
-  return g;
-}
+  m->data = (uint8_t *) m->messages + m->mlen * sizeof(struct message);
+  m->dlen = PAGE_SIZE - sizeof(struct mbox)
+    - m->mlen * sizeof(struct message);
 
-struct agroup *
-agroupcopy(struct agroup *o)
-{
-  struct agroup *g;
-  int i;
-  
-  g = malloc(sizeof(struct agroup));
-  if (g == nil) {
-    return nil;
-  }
+  mm = (struct message *) m->data;
+  mm->rlen = m->dlen - sizeof(struct message);
+  mm->len = 0;
 
-  g->refs = 1;
-  g->naddrs = o->naddrs;
-
-  g->addrs = malloc(sizeof(struct addr *) * g->naddrs);
-  if (g->addrs == nil) {
-    free(g);
-    return nil;
-  }
-
-  for (i = 0; i < o->naddrs; i++) {
-    g->addrs[i] = o->addrs[i];
-    if (g->addrs[i] != nil) {
-      atomicinc(&g->addrs[i]->refs);
-    }
-  }
-  
-  return g;
-}
-
-void
-agroupfree(struct agroup *g)
-{
-  int a;
-  
-  if (atomicdec(&g->refs) > 0) {
-    return;
-  }
-
-  for (a = 0; a < g->naddrs; a++) {
-    if (g->addrs[a] != nil) {
-      addrfree(g->addrs[a]);
-    }
-  }
-  
-  free(g->addrs);
-  free(g);
-}
-
-struct addr *
-addrnew(void)
-{
-  struct addr *a;
-
-  a = malloc(sizeof(struct addr));
-  if (a == nil) {
-    return nil;
-  }
-
-  a->refs = 1;
-  a->nextmid = 1;
-  
-  a->recv = a->reply = nil;
-  a->waiting = nil;
-
-  return a;
-}
-
-void
-addrfree(struct addr *a)
-{
-  struct message *m;
-  
-  if (atomicdec(&a->refs) > 0) {
-    return;
-  }
-
-  for (m = a->recv; m != nil; m = m->next) {
-    m->ret = ERR;
-    procready(m->sender);
-  }    
-
-  for (m = a->reply; m != nil; m = m->next) {
-    m->ret = ERR;
-    procready(m->sender);
-  }
-
-  free(a);
-}
-
-int
-kmessage(struct addr *a, struct message *m)
-{
-  struct message *p;
- 
-  m->mid = atomicinc(&a->nextmid);
-  m->sender = up;
-  m->replyer = nil;
-
-  m->next = nil;
-  while (true) {
-    p = a->recv;
-    while (p != nil && p->next != nil)
-      p = p->next;
-
-    if (p == nil) {
-      if (cas(&a->recv, nil, m)) {
-	break;
-      }
-    } else if (cas(&p->next, nil, m)) {
-      break;
-    }
-  }
-
-  if (a->waiting != nil) {
-    procready(a->waiting);
-  }
-
-  procwait();
-
-  return m->ret;
-}
-
-struct message *
-krecv(struct addr *a)
-{
-  struct message *m;
-
-  lock(&a->lock);
-  
-  do {
-    m = a->recv;
-
-    if (m == nil) {
-      a->waiting = up;
-      procwait();
-      continue;
-    }
-
-  } while (!cas(&a->recv, m, m->next));
-  
-  unlock(&a->lock);
-
-  m->next = a->reply;
-  a->reply = m;
-  
   return m;
 }
 
-int
-kreply(struct addr *a, uint32_t mid, void *rb)
+static struct message *
+findandfillspot(struct mbox *mbox, void *buf, size_t len)
 {
-  struct message *m, *p;
+  size_t olen, rlen, nlen;
+  struct message *m, *n;
 
- retry:
-  p = nil;
-  for (m = a->reply; m != nil; p = m, m = m->next) {
-    if (m->mid != mid) continue;
+  rlen = roundptr(len);
 
-    if (p == nil) {
-      if (!cas(&a->reply, m, m->next)) {
-	goto retry;
+  m = (struct message *) mbox->data;
+  while ((uint8_t *) m < mbox->data + mbox->dlen) {
+    olen = m->rlen;
+    n = (struct message *) ((uint8_t *) m +
+			    sizeof(struct message) +
+			    olen);
+
+    if (m->len == 0) {
+      /* If next is free join it with this then check again */
+      if (((uint8_t *) n < mbox->data + mbox->dlen) && (n->len == 0)) {
+	nlen = olen + sizeof(struct message) + n->rlen;
+	cas(&m->rlen, (void *) olen, (void *) nlen);
+	continue;
       }
-    } else if (!cas(&p->next, m, m->next)) {
-      goto retry;
+
+      if (rlen <= olen) {
+	if (cas(&m->len, (void *) 0, (void *) len)) {
+
+	  /* Create new free chunk with excess if there is any */
+	  if (sizeof(struct message) + rlen < olen) {
+	    n = (struct message *) ((uint8_t *) m +
+				    sizeof(struct message) +
+				    rlen);
+
+	    n->rlen = olen - (sizeof(struct message) + rlen);
+	    n->len = 0;
+
+	    m->rlen = rlen;
+	  }
+
+	  memmove(m->body, buf, len);
+	  return m;
+	} else {
+	  continue;
+	}
+      }
     }
 
-    break;
+    m = n;
   }
 
+  return nil;
+}
+
+void
+kmessagefree(struct message *m)
+{
+  /* Mark position free */
+  m->len = 0;
+}
+
+int
+ksend(int pid, void *buf, size_t len)
+{
+  struct message *m, *o;
+  size_t otail, ntail;
+  struct mbox *mbox;
+  struct proc *p;
+
+  p = findproc(pid);
+  if (p == nil) {
+    return ERR;
+  }
+
+  mbox = p->mbox;
+
+  m = findandfillspot(mbox, buf, len);
   if (m == nil) {
     return ERR;
   }
-  
-  memmove(m->reply, rb, MESSAGELEN);
-  m->replyer = up;
-  m->ret = OK;
 
-  procready(m->sender);
+ try:
+  otail = mbox->tail;
+  ntail = (otail + 1) % mbox->mlen;
+
+  if (ntail == mbox->head) {
+    kmessagefree(m);
+    return ERR;
+  }
+
+  o = mbox->messages[otail];
+  if (cas(&mbox->messages[otail], o, m)) {
+    if (cas(&mbox->tail, (void *) otail, (void *) ntail)) {
+      return OK;
+    } else {
+      goto try;
+    }
+  } else {
+    goto try;
+  }
   
-  return OK;
+  return ERR;
+}
+
+struct message *
+krecv(void)
+{
+  struct message *m;
+  struct mbox *mbox;
+  size_t h, n;
+  
+ try:
+  mbox = up->mbox;
+
+  h = mbox->head;
+  if (h == mbox->tail) {
+    return nil;
+  }
+
+  n = (h + 1) % mbox->mlen;
+  
+  m = mbox->messages[h];
+  if (cas(&mbox->head, (void *) h, (void *) n)) {
+    return m;
+  } else {
+    goto try;
+  }
 }

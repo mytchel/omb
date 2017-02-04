@@ -25,7 +25,7 @@
  *
  */
 
-#include "../kern/head.h"
+#include "head.h"
 #include "fns.h"
 
 #define UART0   	0x44E09000

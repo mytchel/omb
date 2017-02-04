@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2016 Mytchel Hammond <mytchel@openmailbox.org>
+ * Copyright (c) 2017 Mytchel Hammond <mytchel@openmailbox.org>
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -25,35 +25,17 @@
  *
  */
 
-#include "head.h"
+#include <head.h>
 
-static void addtolistfront(struct proc **, struct proc *);
 static void addtolistback(struct proc **, struct proc *);
 static bool removefromlist(struct proc **, struct proc *);
 
 static uint32_t nextpid = 0;
 
+static struct proc *procs = nil;
 static struct proc *ready = nil;
-static struct proc *sleeping = nil;
-static struct proc *suspended = nil;
-
-static struct proc *nullproc;
 
 struct proc *up = nil;
-
-void
-schedulerinit(void)
-{
-  nullproc = procnew();
-  if (nullproc == nil) {
-    panic("Failed to create null proc!\n");
-  }
-
-  nullproc->quanta = mstoticks(QUANTA_MIN);
-  
-  forkfunc(nullproc, &nullprocfunc, nil);
-  procready(nullproc);
-}
 
 static struct proc *
 nextproc(void)
@@ -61,312 +43,41 @@ nextproc(void)
   struct proc *p;
 
   p = ready;
-  if (p != nil) {
-    ready = p->snext;
+
+  if (p == nil) {
+    return nil;
   } else {
-    p = nullproc;
-  }
-
-  return p;
-}
-
-static void
-updatesleeping(uint32_t t)
-{
-  struct proc *p, *pp, *pt;
-
-  pp = nil;
-  p = sleeping;
-  while (p != nil) {
-    if (t >= p->sleep) {
-      if (pp == nil) {
-	sleeping = p->snext;
-      } else {
-	pp->snext = p->snext;
-      }
-
-      pt = p->snext;
-
-      p->state = PROC_ready;
-      addtolistback(&ready, p);
-
-      p = pt;
-    } else {
-      p->sleep -= t;
-
-      pp = p;
-      p = p->snext;
-    }
+    ready = p->snext;
+    return p;
   }
 }
 
 void
 schedule(void)
 {
-  uint32_t t;
-
   if (up != nil) {
     if (up->state == PROC_oncpu) {
       up->state = PROC_ready;
-
-      if (up != nullproc) {
-	addtolistback(&ready, up);
-      }
+      addtolistback(&ready, up);
+    } else {
     }
-
+    
     if (setlabel(&up->label)) {
       return;
     }
   }
 
-  t = ticks();
-
-  updatesleeping(t);
-	
   up = nextproc();
-  up->state = PROC_oncpu;
+  setsystick(mstoticks(10));
 
-  mmuswitch(up->mmu);
-
-  setsystick(up->quanta);
-  
-  cticks();
-  gotolabel(&up->label);
-}
-	
-struct proc *
-procnew(void)
-{
-  struct proc *p;
-	
-  p = malloc(sizeof(struct proc));
-  if (p == nil) {
-    return nil;
+  if (up == nil) {
+    puts("no procs to run\n");
+    while (true)
+      ;
+ } else {
+    up->state = PROC_oncpu;
+    gotolabel(&up->label);
   }
-
-  p->quanta = mstoticks(QUANTA_DEF);
-  
-  p->pid = nextpid++;
-
-  p->mmu = mmunew();
-
-  p->kstack = getrampage();
-  if (p->kstack == nil) {
-    free(p);
-    return nil;
-  }
- 
-  p->state = PROC_suspend;
-  addtolistfront(&suspended, p);
-
-  return p;
-}
-
-void
-procexit(struct proc *p, int code)
-{
-  struct proc *par, *c;
-  
-  if (p->dotchan != nil) {
-    chanfree(p->dotchan);
-    p->dotchan = nil;
-  }
-
-  if (p->fgroup != nil) {
-    fgroupfree(p->fgroup);
-    p->fgroup = nil;
-  }
-
-  if (p->ngroup != nil) {
-    ngroupfree(p->ngroup);
-    p->ngroup = nil;
-  }
-
-  if (p->agroup != nil) {
-    agroupfree(p->agroup);
-    p->agroup = nil;
-  }
-
-  if (p->dot != nil) {
-    pathfree(p->dot);
-    p->dot = nil;
-  }
-
-  if (p->ustack != nil) {
-    pagelfree(p->ustack);
-    p->ustack = nil;
-  }
- 
-  if (p->mgroup != nil) {
-    mgroupfree(p->mgroup);
-    p->mgroup = nil;
-  }
-
-  par = p->parent;
-
-  for (c = p->children; c != nil; c = c->cnext) {
-    c->parent = par;
-  }
-
-  if (par != nil) {
-    while (true) {
-      c = par->children;
-      while (c != nil && c->cnext != nil)
-	c = c->cnext;
-
-      if (c == nil) {
-	if (cas(&par->children, nil, p->children)) {
-	  break;
-	}
-      } else if (cas(&c->cnext, nil, p->children)) {
-	break;
-      }
-    }
-
-    p->children = nil;
-
-    while (true) {
-      c = par->children;
-      if (c == p) {
-	if (cas(&par->children, p, p->cnext)) {
-	  break;
-	} else {
-	  continue;
-	}
-      }
-
-      while (c->cnext != p)
-	c = c->cnext;
-
-      if (cas(&c->cnext, p, p->cnext)) {
-	break;
-      }
-    }
-
-    do {
-      p->cnext = par->deadchildren;
-    } while (!cas(&par->deadchildren, p->cnext, p));
-
-    if (par->state == PROC_waitchild) {
-      procready(par);
-    }
-
-    p->exitcode = code;
-    p->state = PROC_dead;
- 
-  } else {
-    procfree(p);
-  }
-
-  if (p == up) {
-    up = nil;
-  }
-}
-
-void
-procfree(struct proc *p)
-{
-  mmufree(p->mmu);
-  pagefree(p->kstack);
-  free(p);
-}
-
-struct proc *
-waitchild(void)
-{
-  struct proc *p;
-  intrstate_t i;
-
-  if (up->deadchildren == nil) {
-    if (up->children == nil) {
-      return nil;
-    } else {
-      i = setintr(INTR_off);
-
-      up->state = PROC_waitchild;
-      schedule();
-
-      setintr(i);
-    }
-  }
-
-  do {
-    p = up->deadchildren;
-  } while (!(cas(&up->deadchildren, p, p->cnext)));
-  
-  return p;
-}
-
-void
-procready(struct proc *p)
-{
-  if (p->state == PROC_ready) {
-    return;
-  } else if (p->state == PROC_suspend) {
-    removefromlist(&suspended, p);
-  }
-
-  p->state = PROC_ready;
-  addtolistback(&ready, p);
-}
-
-void
-procsleep(uint32_t ms)
-{
-  intrstate_t i;
-
-  up->sleep = mstoticks(ms);
-  addtolistfront(&sleeping, up);
-
-  i = setintr(INTR_off);
-  up->state = PROC_sleeping;
-  
-  schedule();
-  setintr(i);
-}
-
-void
-procyield(void)
-{
-  intrstate_t i;
-
-  addtolistback(&ready, up);
-
-  up->state = PROC_ready;
-  i = setintr(INTR_off);
-  schedule();
-  setintr(i);
-}
-
-void
-procsuspend(struct proc *p)
-{
-  if (p->state == PROC_ready) {
-    removefromlist(&ready, p);
-  }
-  
-  p->state = PROC_suspend;
-  addtolistfront(&suspended, p);
-}
-
-void
-procwait(void)
-{
-  intrstate_t i;
-
-  i = setintr(INTR_off);
-
-  up->state = PROC_waiting;
-  schedule();
-  setintr(i);
-}
-
-void
-addtolistfront(struct proc **l, struct proc *p)
-{
-  do {
-    p->snext = *l;
-  } while (!cas(l, p->snext, p));
 }
 
 void
@@ -411,4 +122,85 @@ removefromlist(struct proc **l, struct proc *p)
       }
     }
   }
+}
+	
+struct proc *
+procnew(struct page *info,
+	struct page *kstack,
+	struct page *mbox)
+{
+  struct proc *p;
+	
+  p = (struct proc *) info->pa;
+
+  p->pid = nextpid++;
+
+  p->info = info;
+  p->kstack = kstack;
+
+  p->mbox = mboxnew(mbox);
+ 
+  p->state = PROC_suspend;
+
+  do {
+    p->next = procs;
+  } while (!cas(&procs, p->next, p));
+
+  return p;
+}
+
+void
+procexit(struct proc *p)
+{
+  printf("proc exit %i\n", p->pid);
+  
+  /*
+  pagefree(p->kstack);
+  pagefree(p->info);
+  */
+
+  if (p->state == PROC_ready) {
+    removefromlist(&ready, p);
+  }
+
+  removefromlist(&procs, p);
+
+  if (p == up) {
+    up = nil;
+  }
+}
+
+void
+procready(struct proc *p)
+{
+  if (p->state == PROC_ready || p->state == PROC_oncpu) {
+    return;
+  }
+
+  p->state = PROC_ready;
+  addtolistback(&ready, p);
+}
+
+void
+procsuspend(struct proc *p)
+{
+  if (p->state == PROC_ready) {
+    removefromlist(&ready, p);
+  }
+  
+  p->state = PROC_suspend;
+}
+
+struct proc *
+findproc(int pid)
+{
+  struct proc *p;
+
+  for (p = procs; p != nil; p = p->next) {
+    if (p->pid == pid) {
+      return p;
+    }
+  }
+
+  return nil;
 }

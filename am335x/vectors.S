@@ -86,33 +86,7 @@ vectortable:
 
 
 swi_ex:
-	stmfd sp!, {r9, r10, r11, lr}
-
-	mrs r9, spsr
-
-	cpsid if, #MODE_SYS
-
-	mov r10, sp
-	mov r11, lr
-	
-	cpsie if, #MODE_SVC
-
-	ldr lr, =syscalltable
-	add r12, lr, r12, lsl #2
-	ldr lr, =1f
-	ldr pc, [r12]
-	
-1:
-	cpsid if, #MODE_SYS
-
-	mov sp, r10
-	mov lr, r11
-	
-	cpsid if, #MODE_SVC
-
-	msr spsr, r9
-	ldmfd sp!, {r9, r10, r11, pc}^
-
+	b swi_ex
 
 irq_ex:
 	stmfd sp, {r0 - r4}
@@ -159,8 +133,8 @@ switch:
 	ldmfd r4, {r5 - r9}
 	stmia sp, {r5 - r9}
 	
-	ands r3, r2, #0xf
-	beq _user
+	;; ands r3, r2, #0xf
+	;; beq _user
 
 	@ kernel mode interrupted
 

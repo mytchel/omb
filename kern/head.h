@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2016 Mytchel Hammond <mytchel@openmailbox.org>
+ * Copyright (c) 2017 Mytchel Hammond <mytchel@openmailbox.org>
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -27,123 +27,51 @@
 
 #include <libc.h>
 #include <syscalls.h>
-#include <mem.h>
-#include <types.h>
 #include <stdarg.h>
-#include <fs.h>
-#include <fssrv.h>
 #include <string.h>
 
-#include <mach.h>
 
-#ifdef _am335x_
-#include "../am335x/head.h"
-#else
-#error Need to set arch
-#endif
+/* Procs */
 
-struct lock {
-  struct proc *holder;
-  struct proc *wlist;
-};
 
 typedef enum {
   PROC_oncpu,
   PROC_suspend,
   PROC_ready,
-  PROC_sleeping,
-  PROC_waiting,
-  PROC_waitchild,
   PROC_dead,
 } procstate_t;
 
 struct proc {
-  struct proc *next; /* For list of procs in list */
-  struct proc *snext; /* For list of procs in list */
-  struct proc *cnext; /* For list of procs in list */
+  struct proc *next; /* For global of procs */
+  struct proc *snext; /* For scheduler */
 
-  int exitcode;
-
-  struct proc *children;
-  struct proc *deadchildren;
-  
   struct label label;
 
-  struct mmu *mmu;
-  
   procstate_t state;
-  uint32_t pid;
-  struct proc *parent;
-
-  struct bindingfid *root;
-  struct path *dot;
-  struct chan *dotchan;
-
-  uint32_t quanta;
+  int pid;
 
   struct page *kstack;
-  struct pagel *ustack;
+  struct page *info; /* Page this struct is stored in */
 
-  struct mgroup *mgroup;
-  struct fgroup *fgroup;
-  struct ngroup *ngroup;
-  struct agroup *agroup;
-
-  uint32_t sleep; /* in ticks */
-  void *aux;
+  struct mbox *mbox;
 };
 
-/****** Initialisation ******/
-
-void
-schedulerinit(void);
-
-void
-heapinit(void *, size_t);
-
-
-/****** General Functions ******/
-
-/* Misc */
-
-void
-lock(struct lock *);
-
-void
-unlock(struct lock *);
-
-int
-kexec(struct chan *f, int argc, char *argv[]);
-
-
-/* Procs */
-
 struct proc *
-procnew(void);
-
-struct proc *
-waitchild(void);
-
-void
-procexit(struct proc *, int code);
+procnew(struct page *info,
+	struct page *kstack,
+	struct page *mbox);
 
 void
-procfree(struct proc *);
+procexit(struct proc *p);
 
 void
-procready(struct proc *);
+procready(struct proc *p);
 
 void
 procsuspend(struct proc *p);
 
-void
-procwait(void);
-
-void
-procsleep(uint32_t ms);
-
-void
-procyield(void);
+struct proc *
+findproc(int pid);
 
 /* This must all be called with interrupts disabled */
 
@@ -151,330 +79,85 @@ void
 schedule(void);
 
 
-/* Pages and Mgroup and memory */
+/* Pages */
+
 
 struct page {
-  unsigned int refs, hookrefs;
-  /* Called on page free once refs reaches hookrefs */
-  void (*hook)(struct page *self);
-  void *aux;
-
-  /* Not changable */
+  unsigned int refs;
   reg_t pa;
-  bool forceshare;
-  struct page *next;
-  struct page **from;
 };
 
-struct pagel {
+struct mapping {
+  struct page *to;
   reg_t va;
-  bool rw, c;
-  struct page *p;
-  struct pagel *next;
-};
-
-struct mgroup {
-  unsigned int refs;
-  struct lock lock;
-  struct pagel *pages;
-};
-
-void
-pagefree(struct page *);
-
-void
-pagelfree(struct pagel *);
-
-struct pagel *
-pagelcopy(struct pagel *);
-
-struct pagel *
-wrappage(struct page *p, reg_t va, bool rw, bool c);
-
-struct mgroup *
-mgroupnew(void);
-
-struct mgroup *
-mgroupcopy(struct mgroup *old);
-
-void
-mgroupfree(struct mgroup *m);
-
-bool
-fixfault(void *);
-
-/* Finds the physical address of addr in p's address
- * space and checks if it exstends through to size. 
- * If size is 0, checks if it exstends through to a
- * 0 byte. If it failes any of these checks returns nil.
- */
-void *
-kaddr(struct proc *p, const void *addr, size_t size);
-
-struct pagel *
-getrampages(size_t len, bool rw);
-
-struct pagel *
-getiopages(void *addr, size_t len, bool rw);
-
-void *
-insertpages(struct pagel **head, struct pagel *p, size_t size);
-
-void
-insertpagesfixed(struct pagel **head, struct pagel *p, size_t size);
-
-
-/* Channels */
-
-typedef enum { CHAN_pipe, CHAN_file, CHAN_max } chan_t;
-
-struct chantype {
-  int (*read)(struct chan *, void *, size_t);
-  int (*write)(struct chan *, void *, size_t);
-  int (*seek)(struct chan *, size_t, int);
-  void (*close)(struct chan *);
-};
-
-struct chan {
-  unsigned int refs;
-  chan_t type;
+#define PAGEMODE_ro     0
+#define PAGEMODE_rw     1
   int mode;
-  void *aux;
+  struct mapping *next;
+};
+
+struct mappingtable {
+  struct page *page;
+  struct mappingtable *next;
+  size_t len;
+  struct mapping mappings[];
+};
+
+struct addrspace {
+  int refs;
+  struct page *page;
+  struct mappingtable *mappings;
+  size_t size;
+  struct mapping *table[];
 };
 
 
-struct chan *
-channew(int, int);
 
-void
-chanfree(struct chan *);
+/* Messages */
 
-
-/* Paths */
-
-struct path {
-  char s[NAMEMAX];
-  struct path *prev, *next;
+struct mbox {
+  struct page *page;
+  size_t head, tail;
+  size_t mlen, dlen;
+  struct message **messages;
+  uint8_t *data;
 };
-
-struct path *
-strtopath(struct path *prev, const char *str);
-
-char *
-pathtostr(struct path *, size_t *);
-
-struct path *
-pathcopy(struct path *);
-
-void
-pathfree(struct path *);
-
-
-/* Fgroup */
-
-struct fgroup {
-  unsigned int refs;
-  size_t nchans;
-  struct chan **chans;
-};
-
-struct fgroup *
-fgroupnew(size_t max);
-
-void
-fgroupfree(struct fgroup *);
-
-struct fgroup *
-fgroupcopy(struct fgroup *);
-
-int
-fgroupaddchan(struct fgroup *, struct chan *);
-
-int
-fgroupreplacechan(struct fgroup *, struct chan *, int fd);
-
-struct chan *
-fdtochan(struct fgroup *, int);
-
-
-/* Ngroup and bindings */
-  
-struct binding {
-  unsigned int refs;
-  struct addr *addr;
-  struct bindingfid *fids;
-};
-
-struct bindingl {
-  struct binding *binding;
-
-  struct bindingfid *boundfid;
-  struct bindingfid *rootfid;
-
-  struct bindingl *next;
-};
-
-struct ngroup {
-  unsigned int refs;
-  struct lock lock;
-  struct bindingl *bindings;
-};
-
-struct ngroup *
-ngroupnew(void);
-
-void
-ngroupfree(struct ngroup *);
-
-struct ngroup *
-ngroupcopy(struct ngroup *);
-
-struct binding *
-bindingnew(struct addr *addr, uint32_t rootattr);
-
-void
-bindingfree(struct binding *);
-
-struct bindingl *
-ngroupfindbindingl(struct ngroup *n, struct bindingfid *fid);
-
-int
-ngroupaddbinding(struct ngroup *n, struct binding *b,
-		 struct bindingfid *boundfid, 
-		 struct bindingfid *rootfid);
-
-int
-ngroupremovebinding(struct ngroup *n, struct bindingfid *fid);
-
-
-/* Files */
-
-struct bindingfid {
-  unsigned int refs;
-  
-  uint32_t fid;
-  uint32_t attr;
-  uint32_t len;
-
-  char name[NAMEMAX];
-
-  struct pagel *pages;
-
-  struct binding *binding;
-  struct bindingfid *parent;
-  struct bindingfid *children;
-  struct bindingfid *cnext;
-};
-
-bool
-pipenew(struct chan **rd, struct chan **wr);
-
-int
-piperead(struct chan *c, void *buf, size_t len);
-
-int
-pipewrite(struct chan *c, void *buf, size_t len);
-
-int
-filestat(struct path *path, struct stat *stat);
-
-struct chan *
-fileopen(struct path *path,
-	 uint32_t mode, uint32_t cattr,
-	 int *err);
-
-void
-bindingfidfree(struct bindingfid *fid);
-
-struct bindingfid *
-findfile(struct path *path, int *err);
-
-int
-fileremove(struct path *);
-
-int
-fileread(struct chan *c, void *buf, size_t len);
-
-int
-filewrite(struct chan *c, void *buf, size_t len);
-
-int
-fileseek(struct chan *c, size_t offset, int whence);
-
-struct pagel *
-getfilepages(struct chan *c, size_t offset, size_t len, bool rw);
-
-
-/* Messages and agroup */
 
 struct message {
-  void *message, *reply;
-
-  struct proc *sender, *replyer;
-  uint32_t mid;
-  int ret;
-  struct message *next;
+  size_t rlen; /* Length of body taken from chunk */
+  size_t len; /* Length of filled body */
+  uint8_t body[];
 };
 
-struct addr {
-  unsigned int refs;
-
-  struct message *recv, *reply;
-  uint32_t nextmid;
-
-  struct proc *waiting;
-  struct lock lock;
-};
-
-struct agroup {
-  unsigned int refs;
-  size_t naddrs;
-  struct addr **addrs;
-};
-
-struct agroup *
-agroupnew(size_t max);
-
-struct agroup *
-agroupcopy(struct agroup *old);
+struct mbox *
+mboxnew(struct page *page);
 
 void
-agroupfree(struct agroup *g);
-
-struct addr *
-addrnew(void);
-
-void
-addrfree(struct addr *a);
+kmessagefree(struct message *m);
 
 int
-kmessage(struct addr *a, struct message *m);
+ksend(int pid, void *message, size_t len);
 
 struct message *
-krecv(struct addr *a);
-
-int
-kreply(struct addr *a, uint32_t mid, void *rb);
+krecv(void);
 
 
-/* Debug */
 
-int
-printf(const char *, ...);
+/* Mem */
 
-void
-panic(const char *, ...);
+
+void *
+memmove(void *dest, const void *src, size_t len);
+
+void *
+memset(void *dest, int c, size_t len);
+
 
 
 
 /****** Machine Implimented ******/
 
-/* Type and psr are ignored. */
-void
-droptouser(struct label *regs, void *kstack)__attribute__((noreturn));
 
-void
-dumpregs(struct label *);
 
 void
 puts(const char *);
@@ -502,50 +185,14 @@ setlabel(struct label *);
 int
 gotolabel(struct label *) __attribute__((noreturn));
 
-int
-nullprocfunc(void *);
-
 void
 forkfunc(struct proc *, int (*func)(void *), void *);
 
 reg_t
 forkchild(struct proc *);
 
-void
-readyexec(struct label *ureg, void *entry, int argc, char *argv[]);
-
-void
-mmuswitch(struct mmu *);
-
-void
-mmuputpage(struct pagel *);
-
-struct mmu *
-mmunew(void);
-
-void
-mmufree(struct mmu *mmu);
-
-bool
-procwaitintr(int);
-
-struct page *
-getrampage(void);
-
-struct page *
-getiopage(void *addr);
-
-/* Returns old state of interrupts for resetting. */
-
-intrstate_t
-setintr(intrstate_t);
-
-
 
 /****** Global Variables ******/
 
 extern struct proc *up;
 
-extern void *syscalltable[NSYSCALLS];
-
-extern struct chantype *chantypes[CHAN_max];

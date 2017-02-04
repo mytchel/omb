@@ -37,7 +37,7 @@ memprocfunc(void *arg)
     message = krecv();
     if (message == nil) {
     } else {
-      printf("mem got message of length %i '%s'\n", message->len, message->body);
+      printf("mem got %i\n", message->len);
       kmessagefree(message);
     }
   }

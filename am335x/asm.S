@@ -27,7 +27,6 @@
 
 .section .text
 
-.global setintr
 .global setlabel
 .global gotolabel
 .global droptouser
@@ -42,29 +41,8 @@
 .global mmudisable
 .global mmuinvalidate
 .global cas
-.global cas2
 .global atomicinc 
 .global atomicdec
-
-
-setintr:
-	push {r1, lr}
-
-	mrs r1, cpsr
-
-	cmp r0, #MODE_DI
-
-	@ disable intr
-	orreq r0, r1, #MODE_DI
-
-	@ enable intr
-	bicne r0, r1, #MODE_DI
-	
-	msr cpsr, r0
-	
-	and r0, r1, #MODE_DI
-
-	pop {r1, pc}
 
 
 setlabel:
@@ -104,14 +82,9 @@ droptouser:
 funcloader:
 	ldr lr, =1f
 	ldmia sp!, {r0, pc}
-1:	mov r1, r0
-	ldr r0, =up
-	ldr r0, [r0]
-	bl procexit
-	cpsid if
-	bl schedule
+1:
+	b 1b
 
-	
 fsrstatus:
 	mrc p15, 0, r0, c5, c0, 0
 	mov pc, lr
@@ -189,7 +162,7 @@ cas:
 	
 	mov pc, lr
 
-
+	
 atomicinc:
 	push {r1, r2, lr}
 1:

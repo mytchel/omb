@@ -23,14 +23,10 @@
 #  OTHER DEALINGS IN THE SOFTWARE
 #
 
-BASE ?= ../../
-
-include $(BASE)/config.mk
-
 src = mkuboot.c copy_elf32.c copy_elf64.c
 
 mkuboot: $(src)
-	@$(HOSTCC) -o $@ $(src) $(HOSTLDFLAGS) -lz
+	@cc -o $@ $(src) -lz
 
 
 .PHONY: clean

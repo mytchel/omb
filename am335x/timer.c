@@ -25,13 +25,11 @@
  *
  */
 
-#include "../kern/head.h"
+#include <head.h>
 #include "fns.h"
 
-#define TIMER0 0x44E05000
 #define TIMER2 0x48040000
 
-#define TINT0 66
 #define TINT2 68
 
 #define TIMER_IRQSTATUS		0x28
@@ -73,45 +71,31 @@ timersinit(void)
 {
   /* Select 32KHz clock for timer 2 */
   writel(2, CM_DPLL + CLK_SEL2);
-  writel(2, CM_DPLL + CLK_SEL0);
 
   /* set irq for overflow */
   writel(1<<1, TIMER2 + TIMER_IRQENABLE_SET);
 
   intcaddhandler(TINT2, &systickhandler);
-
-  /* Set up tick timer on timer 0. */
-
-  writel(0, TIMER0 + TIMER_TCRR); /* set timer to 0 */
-  writel(1, TIMER0 + TIMER_TCLR); /* start timer */
 }
 
 void
 systickhandler(uint32_t irqn)
 {
+  /* Clear irq status if it is set. */
+  writel(1<<1, TIMER2 + TIMER_IRQSTATUS);
+
+  intcreset();
+  
   schedule();
 }
 
 void
 setsystick(uint32_t t)
 {
+  /* set timer */
   writel(0xffffffff - t, TIMER2 + TIMER_TCRR); 
-  /* Clear irq status if it is set. */
-  writel(3, TIMER2 + TIMER_IRQSTATUS);
   /* start timer */
   writel(1, TIMER2 + TIMER_TCLR);
-}
-
-uint32_t
-ticks(void)
-{
-  return readl(TIMER0 + TIMER_TCRR);
-}
-
-void
-cticks(void)
-{
-  writel(0, TIMER0 + TIMER_TCRR); /* reset timer */
 }
 
 uint32_t

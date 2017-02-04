@@ -32,33 +32,9 @@
 @ System calls 
 .global exit
 .global fork
-.global exec
-.global sleep
 .global getpid
-.global wait
-.global serv
-.global unserv
-.global message
+.global send
 .global recv
-.global reply
-.global mmap 
-.global munmap
-.global pipe
-.global read
-.global write
-.global seek
-.global stat 
-.global chdir
-.global close
-.global mount
-.global bind
-.global unbind
-.global open
-.global remove
-.global dup
-.global dup2
-.global cleanpath
-.global waitintr
 
 @ Useful assembly functions
 .global cas
@@ -85,20 +61,6 @@ fork:
 	pop {r12, pc}
 
 	
-exec:
-	push {r12, lr}
-	mov r12, #SYSCALL_EXEC
-	svc 0
-	pop {r12, pc}
-
-
-sleep:
-	push {r12, lr}
-	mov r12, #SYSCALL_SLEEP
-	svc 0
-	pop {r12, pc}
-	
-	
 getpid:
 	push {r12, lr}
 	mov r12, #SYSCALL_GETPID
@@ -106,30 +68,10 @@ getpid:
 	mov pc, lr
 	pop {r12, pc}
 
-wait:
-	push {r12, lr}
-	mov r12, #SYSCALL_WAIT
-	svc 0
-	pop {r12, pc}
 
-
-serv:
+send:
 	push {r12, lr}
-	mov r12, #SYSCALL_SERV
-	svc 0
-	pop {r12, pc}
-
-	
-unserv:
-	push {r12, lr}
-	mov r12, #SYSCALL_UNSERV
-	svc 0
-	pop {r12, pc}
-
-	
-message:
-	push {r12, lr}
-	mov r12, #SYSCALL_MESSAGE
+	mov r12, #SYSCALL_SEND
 	svc 0
 	pop {r12, pc}
 
@@ -140,144 +82,7 @@ recv:
 	svc 0
 	pop {r12, pc}
 
-	
-reply:
-	push {r12, lr}
-	mov r12, #SYSCALL_REPLY
-	svc 0
-	pop {r12, pc}
-
-	
-mmap:
-	sub sp, sp, #4
-	str r3, [sp]
-	mov r3, sp
-	push {r12, lr}
-	mov r12, #SYSCALL_MMAP
-	svc 0
-	pop {r12, lr}
-	add sp, sp, #4
-	mov pc, lr
-
-
-munmap:
-	push {r12, lr}
-	mov r12, #SYSCALL_MUNMAP
-	svc 0
-	pop {r12, pc}
-			
-chdir:
-	push {r12, lr}
-	mov r12, #SYSCALL_CHDIR
-	svc 0
-	pop {r12, pc}
-
-
-pipe:
-	push {r12, lr}
-	mov r12, #SYSCALL_PIPE
-	svc 0
-	pop {r12, pc}
-
-
-read:
-	push {r12, lr}
-	mov r12, #SYSCALL_READ
-	svc 0
-	pop {r12, pc}
-
-
-write:
-	push {r12, lr}
-	mov r12, #SYSCALL_WRITE
-	svc 0 
-	pop {r12, pc}
-
-
-seek:
-	push {r12, lr}
-	mov r12, #SYSCALL_SEEK
-	svc 0 
-	pop {r12, pc}
-
-	
-stat:
-	push {r12, lr}
-	mov r12, #SYSCALL_STAT
-	svc 0
-	pop {r12, pc}
-
-
-close:
-	push {r12, lr}
-	mov r12, #SYSCALL_CLOSE
-	svc 0
-	pop {r12, pc}
-
-
-mount:
-	push {r12, lr}
-	mov r12, #SYSCALL_MOUNT
-	svc 0
-	pop {r12, pc}
-
-
-bind:
-	push {r12, lr}
-	mov r12, #SYSCALL_BIND
-	svc 0
-	pop {r12, pc}
-
-
-unbind:
-	push {r12, lr}
-	mov r12, #SYSCALL_UNBIND
-	svc 0
-	pop {r12, pc}
-
-
-open:
-	push {r12, lr}
-	mov r12, #SYSCALL_OPEN
-	svc 0
-	pop {r12, pc}
-
-
-remove:
-	push {r12, lr}
-	mov r12, #SYSCALL_REMOVE
-	svc 0
-	pop {r12, pc}
-
-
-dup:
-	push {r12, lr}
-	mov r12, #SYSCALL_DUP
-	svc 0
-	pop {r12, pc}
-
-	
-dup2:
-	push {r12, lr}
-	mov r12, #SYSCALL_DUP2
-	svc 0
-	pop {r12, pc}
-
-
-cleanpath:
-	push {r12, lr}
-	mov r12, #SYSCALL_CLEANPATH
-	svc 0
-	pop {r12, pc}
-
-	
-waitintr:
-	push {r12, lr}
-	mov r12, #SYSCALL_WAITINTR
-	svc 0
-	pop {r12, pc}
-
-
+		
 @bool
 @cas(void *addr, void *old, void *new);
 cas:

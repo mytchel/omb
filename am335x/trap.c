@@ -25,7 +25,7 @@
  *
  */
 
-#include "../kern/head.h"
+#include <head.h>
 #include "fns.h"
 
 #define INTC			0x48200000
@@ -50,13 +50,14 @@
 
 #define nirq 128
 
+/*
 static void
 maskintr(uint32_t irqn);
+*/
 static void
 unmaskintr(uint32_t irqn);
 
-static void (*handlers[nirq])(uint32_t) = {0};
-static struct proc *waiting[nirq] = {nil};
+static void (*handlers[nirq])(uint32_t) = {nil};
 
 void
 intcinit(void)
@@ -79,6 +80,7 @@ intcinit(void)
   writel(1, INTC + INTC_CONTROL);
 }
 
+/*
 void
 maskintr(uint32_t irqn)
 {
@@ -89,6 +91,7 @@ maskintr(uint32_t irqn)
 
   writel(mask, INTC + INTC_SETn(mfield));
 }
+*/
 
 void
 unmaskintr(uint32_t irqn)
@@ -108,57 +111,23 @@ intcaddhandler(uint32_t irqn, void (*func)(uint32_t))
   unmaskintr(irqn);
 }
 
-bool
-procwaitintr(int irqn)
+void
+intcreset(void)
 {
-  intrstate_t t;
-  
-  if (irqn < 0 || irqn > nirq) {
-    return false;
-  } else if (handlers[irqn] != nil) {
-    return false;
-  }
-
-  if (!cas(&waiting[irqn], nil, up)) {
-    return false;
-  }
-
-  t = setintr(INTR_off);
-
-  unmaskintr(irqn);
-  procwait();
-
-  setintr(t);
-
-  return true;
+  writel(1, INTC + INTC_CONTROL);
 }
 
 static void
 irqhandler(void)
 {
-  struct proc *p;
   uint32_t irq;
 	
   irq = readl(INTC + INTC_SIR_IRQ);
-
-  /* Allow new interrupts */
-  writel(1, INTC + INTC_CONTROL);
-
+  
   if (handlers[irq]) {
-    /* Kernel handler */
     handlers[irq](irq);
   } else {
-    /* User proc handler */
-    p = waiting[irq];
-    if (p == nil) {
-      return;
-    }
-
-    waiting[irq] = nil;
-    maskintr(irq);
-
-    procready(p);
-    schedule();
+    puts("no handler\n");
   }
 }
 
@@ -168,11 +137,6 @@ trap(void *pc, int type)
   uint32_t fsr;
   void *addr;
 
-  if (up == nil) {
-    printf("Trapped with an unknown process!\n");
-    panic("Probably an in kernel problem.\n");
-  }
-
   switch(type) {
   case ABORT_INTERRUPT:
     irqhandler();
@@ -180,59 +144,24 @@ trap(void *pc, int type)
     return; /* Note the return. */
 
   case ABORT_INSTRUCTION:
-    printf("%i bad instruction at 0x%h\n",
-	   up->pid, pc);
+    puts("bad instruction\n");
     break;
 
   case ABORT_PREFETCH:
-    if (fixfault((void *) pc)) {
-      return;
-    }
-
-    printf("%i prefetch abort 0x%h\n",
-	   up->pid, pc);
-
+    puts("prefetch abort\n");
     break;
 
   case ABORT_DATA:
     addr = faultaddr();
     fsr = fsrstatus() & 0xf;
-
-    switch (fsr) {
-    case 0x5: /* section translation */
-    case 0x7: /* page translation */
-      /* Try add page */
-      if (fixfault(addr)) {
-	return;
-      }
-      
-      break;
-    case 0x0: /* vector */
-    case 0x1: /* alignment */
-    case 0x3: /* also alignment */
-    case 0x2: /* terminal */
-    case 0x4: /* external linefetch section */
-    case 0x6: /* external linefetch page */
-    case 0x8: /* external non linefetch section */
-    case 0xa: /* external non linefetch page */
-    case 0x9: /* domain section */
-    case 0xb: /* domain page */
-    case 0xc: /* external translation l1 */
-    case 0xe: /* external translation l2 */
-    case 0xd: /* section permission */
-    case 0xf: /* page permission */
-    default:
-      break;
-    }
-
-    printf("%i data abort 0x%h (type 0x%h)\n",
-	   up->pid, addr, fsr);
-		
+    
+    printf("data abort at 0x%h for 0x%h type 0x%h\n", pc, addr, fsr);
     break;
   }
-	
-  printf("kill proc %i (trap %i, at 0x%h)\n", up->pid, type, pc);
-  procexit(up, -1);
+
+  printf("killing proc %i\n", up->pid);
+  procexit(up);
   schedule();
+  
   /* Never reached */
 }
