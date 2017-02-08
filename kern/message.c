@@ -28,17 +28,16 @@
 #include <head.h>
 
 struct mbox *
-mboxnew(struct page *page)
+mboxnew(reg_t page)
 {
   struct message *mm;
   struct mbox *m;
 
-  m = (struct mbox *) page->pa;
-  m->page = page;
+  m = (struct mbox *) page;
   m->head = 0;
   m->tail = 0;
 
-  m->messages = (struct message **) (page->pa + sizeof(struct mbox));
+  m->messages = (struct message **) (page + sizeof(struct mbox));
   m->mlen = PAGE_SIZE / 4 / sizeof(struct message);
 
   m->data = (uint8_t *) m->messages + m->mlen * sizeof(struct message);

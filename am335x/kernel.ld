@@ -1,11 +1,11 @@
 SECTIONS
 {
 	. = 0x80000000;
-	_ram_start = .;
+	ram_start = .;
 
 	.text ALIGN(4096) :
 	{
-		_kernel_start = .;
+		kernel_start = .;
 		*(.text)
 	}
 	
@@ -23,19 +23,29 @@ SECTIONS
 	
 	.bss ALIGN(4096) : 
 	{
-		_kernel_bss_start = .;
+		kernel_bss_start = .;
 		*(.bss)
 		*(.bss.*)
-		_kernel_bss_end = .;
+		kernel_bss_end = .;
 	}
 
 	. = ALIGN(4096);
 
 	. = . + 0x100;
-	_ex_stack_top = .;
+	ex_stack_top = .;
 
-	_kernel_end = .;
+	kernel_end = .;
+
+	.init ALIGN(4096) :
+	{
+		init_start = .;
+
+		_init.o(*)
+
+		. = ALIGN(4096);
+		init_end = .;
+	}
 
 	. = 0xa0000000;
-	_ram_end = .;
+	ram_end = .;
 }

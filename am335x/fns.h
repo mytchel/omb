@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2016 Mytchel Hammond <mytchel@openmailbox.org>
+ * Copyright (c) 2017 Mytchel Hammond <mytchel@openmailbox.org>
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -109,7 +109,7 @@ memprocinit(void);
 void
 mainprocinit(void);
 
-struct page *
+reg_t
 getrampage(void);
 
 #endif

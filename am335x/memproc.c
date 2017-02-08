@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2016 Mytchel Hammond <mytchel@openmailbox.org>
+ * Copyright (c) 2017 Mytchel Hammond <mytchel@openmailbox.org>
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -48,14 +48,17 @@ memprocfunc(void *arg)
 void
 memprocinit(void)
 {
-  struct page *info, *kstack, *mbox;
+  reg_t page, kstack, mboxpage;
+  struct mbox *mbox;
   struct proc *p;
   
-  info = getrampage();
+  page = getrampage();
   kstack = getrampage();
-  mbox = getrampage();
+  mboxpage = getrampage();
 
-  p = procnew(info, kstack, mbox);
+  mbox = mboxnew(mboxpage);
+
+  p = procnew(page, kstack, mbox, nil);
 
   forkfunc(p, &memprocfunc, nil);
   procready(p);

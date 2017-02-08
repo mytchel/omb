@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2016 Mytchel Hammond <mytchel@openmailbox.org>
+ * Copyright (c) 2017 Mytchel Hammond <mytchel@openmailbox.org>
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -46,6 +46,7 @@
 uint32_t
 ttb[4096]__attribute__((__aligned__(16*1024))) = { L1_FAULT };
 
+struct addrspace *space;
 uint32_t low = UINT_MAX;
 uint32_t high = 0;
 
@@ -99,3 +100,186 @@ imap(void *start, void *end, int ap, bool cachable)
     x += 1 << 20;
   }
 }
+
+static void
+mmuswitchstack(struct stack *s)
+{
+  if (s->l2 != 0) {
+    ttb[L1X(s->bottom)] = s->l2 | L1_COARSE;
+    if (L1X((uint32_t) s->bottom) > high) {
+      high = L1X((uint32_t) s->bottom);
+    } else if (L1X((uint32_t) s->bottom) < low) {
+      low = L1X((uint32_t) s->bottom);
+    }
+  }
+}
+
+static void
+mmuswitchl2(struct l2 l2s[], size_t len)
+{
+  struct l2 *l2;
+  size_t i;
+
+  for (i = 0; i < len; i++) {
+    l2 = &l2s[i];
+    if (l2->va == 0) {
+      break;
+    }
+
+    ttb[L1X(l2->va)] = l2->pa | L1_COARSE;
+    if (L1X((uint32_t) l2->va) > high) {
+      high = L1X((uint32_t) l2->va);
+    } else if (L1X((uint32_t) l2->va) < low) {
+      low = L1X((uint32_t) l2->va);
+    }
+  }
+}
+
+static void
+mmuswitchaddrspace(struct addrspace *s)
+{
+  struct pagel *pl;
+
+  if (space == s) {
+    return;
+  } else {
+    space = s;
+  }
+  
+  mmuswitchl2(s->l2, PAGE_SIZE - sizeof(struct addrspace));
+  
+  for (pl = s->l2s; pl != nil; pl = pl->next) {
+    mmuswitchl2((struct l2 *) pl->pa, PAGE_SIZE);
+  }
+}
+
+void
+mmuswitch(struct proc *p)
+{
+  mmuempty1();
+  
+  mmuswitchstack(&p->ustack);
+
+  if (p->addrspace != nil) {
+    mmuswitchaddrspace(p->addrspace);
+  }
+}
+
+void
+stackinit(struct stack *s)
+{
+  s->top = USTACK_TOP;
+  s->bottom = USTACK_TOP;
+  s->l2 = 0;
+}
+
+struct addrspace *
+addrspacenew(reg_t page)
+{
+  struct addrspace *s;
+
+  s = (struct addrspace *) page;
+  s->refs = 1;
+  s->l2s = nil;
+  memset(s->l2, 0, PAGE_SIZE - sizeof(struct addrspace));
+
+  return s;
+}
+
+reg_t
+mappingfind(struct proc *p,
+	    reg_t va,
+	    int *flags)
+{
+  return ERR;
+}
+
+static struct l2 *
+getl2new(struct l2 *l2, reg_t l1)
+{
+  l2->va = l1;
+  l2->pa = 0;
+	
+  return l2;
+}
+
+static struct l2 *
+getl2(struct addrspace *s, reg_t l1)
+{
+  struct pagel *pl, *prev;
+  size_t i;
+
+  for (i = 0; i < PAGE_SIZE - sizeof(struct addrspace);
+       i += sizeof(struct l2)) {
+
+    if (s->l2[i].va == 0) {
+      return getl2new(&s->l2[i], l1);
+    } else if (s->l2[i].va == l1) {
+      return &s->l2[i];
+    }
+  }
+
+  prev = nil;
+  for (pl = s->l2s; pl != nil; prev = pl, pl = pl->next) {
+    for (i = 0; i < PAGE_SIZE; i += sizeof(struct l2)) {
+      if (s->l2[i].va == 0) {
+	return getl2new(&s->l2[i], l1);
+      } else if (s->l2[i].va == l1) {
+	return &s->l2[i];
+      }
+    }
+  }
+
+  /* Get another page and use first */
+  printf("need another page after 0x%h\n", prev);
+  return nil;
+}
+
+int
+mappingadd(struct addrspace *s,
+	   reg_t va,
+	   reg_t pa,
+	   int flags)
+{
+  uint32_t tex, ap, c, b;
+  struct l2 *l2;
+  uint32_t *tab;
+
+  l2 = getl2(s, L1X(va));
+  if (l2 == nil) {
+    printf("%i failed to find l2 for 0x%h\n", up->pid, va);
+    return ERR;
+  }
+  
+  tab = (uint32_t *) l2->pa;
+
+  if (flags & PAGE_rw) {
+    ap = AP_RW_RW;
+  } else {
+    ap = AP_RW_RO;
+  }
+
+  /* No caching for now */
+  if (false) {
+    tex = 7;
+    c = 1;
+    b = 0;
+  } else {
+    tex = 0;
+    c = 0;
+    b = 1;
+  }
+
+  tab[L2X(va)] = pa | L2_SMALL |
+    (tex << 6) | (ap << 4) | (c << 3) | (b << 2);
+  
+  return OK;
+}
+
+int
+mappingremove(struct addrspace *s,
+	      reg_t va)
+{
+  return ERR;
+}
+

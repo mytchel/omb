@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2016 Mytchel Hammond <mytchel@openmailbox.org>
+ * Copyright (c) 2017 Mytchel Hammond <mytchel@openmailbox.org>
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -27,6 +27,7 @@
 
 #include <head.h>
 #include "fns.h"
+#include "trap.h"
 
 #define INTC			0x48200000
 
@@ -144,18 +145,18 @@ trap(void *pc, int type)
     return; /* Note the return. */
 
   case ABORT_INSTRUCTION:
-    puts("bad instruction\n");
+    printf("%i bad instruction at 0x%h\n", up->pid, pc);
     break;
 
   case ABORT_PREFETCH:
-    puts("prefetch abort\n");
+    printf("%i prefetch abort at 0x%h\n", up->pid, pc);
     break;
 
   case ABORT_DATA:
     addr = faultaddr();
     fsr = fsrstatus() & 0xf;
     
-    printf("data abort at 0x%h for 0x%h type 0x%h\n", pc, addr, fsr);
+    printf("%i data abort at 0x%h for 0x%h type 0x%h\n", up->pid, pc, addr, fsr);
     break;
   }
 

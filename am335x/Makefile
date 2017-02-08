@@ -1,5 +1,5 @@
 #
-#  Copyright (c) 2016 Mytchel Hammond <mytchel@openmailbox.org>
+#  Copyright (c) 2017 Mytchel Hammond <mytchel@openmailbox.org>
 #  
 #  Permission is hereby granted, free of charge, to any person
 #  obtaining a copy of this software and associated documentation
@@ -32,7 +32,22 @@ loadaddr=0x82000000
 
 .PHONY: all
 all: am335x.list am335x.umg
-CLEAN += am335x.umg am335x.list
+CLEAN += am335x.umg am335x.list init.list
+
+
+ISRC_A := \
+	c.S
+
+ISRC_C := \
+	init.c
+
+IOBJECTS := \
+	$(ISRC_A:%.S=%.o) \
+	$(ISRC_C:%.c=%.o)
+
+CLEAN += $(IOBJECTS)
+
+
 
 KSRC_A := \
         vectors.S               \
@@ -51,6 +66,7 @@ KSRC_C := \
         mainproc.c              \
         ../kern/mem.c           \
         ../kern/message.c       \
+        ../kern/syscall.c       \
         ../kern/string.c        \
         ../kern/printf.c        \
         ../kern/proc.c
@@ -72,18 +88,29 @@ CLEAN += $(KOBJECTS)
 
 
 .elf.bin:
-	@$(OBJCOPY) -Obinary $< $@
+	$(OBJCOPY) -Obinary $< $@
 
 
 .elf.list:
-	@$(OBJDUMP) -S $< > $@
+	$(OBJDUMP) -S $< > $@
+
+
+CLEAN += init.elf init.list
+init.elf: init.ld $(IOBJECTS)
+	$(LD) $(LDFLAGS) \
+		-T init.ld \
+		-o $@ $(IOBJECTS) -lgcc
+
+CLEAN += init.bin _init.o
+_init.o: init.bin
+	$(OBJCOPY) --strip-all init.elf _init.o
 
 
 CLEAN += $(TARGET).elf $(TARGET).list
-am335x.elf: kernel.ld $(KOBJECTS)
+am335x.elf: kernel.ld $(KOBJECTS) _init.o
 	$(LD) $(LDFLAGS) \
 		-T kernel.ld -Ttext $(loadaddr) \
-		-o $@ $(KOBJECTS) -lgcc
+		-o $@ $(KOBJECTS) -lgcc _init.o
 
 
 CLEAN += am335x.elf am335x.bin

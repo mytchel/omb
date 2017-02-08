@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2016 Mytchel Hammond <mytchel@openmailbox.org>
+ * Copyright (c) 2017 Mytchel Hammond <mytchel@openmailbox.org>
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -29,9 +29,10 @@
 #define _LIBC_H_
 
 #include <err.h>
+#include <types.h>
 
 int
-exit(int code) __attribute__((noreturn));
+exit(void) __attribute__((noreturn));
 
 /* Should process aspects be (c)opied, created a(n)ew, or (s)hared. */
 
@@ -44,26 +45,22 @@ fork(unsigned int flags);
 int
 getpid(void);
 
-/* Returns an error or OK, message and reply must be of length
- * MESSAGELEN or greater, they can be the same memory region. 
- */
-int
-send(int pid, void *message, size_t len);
+#define MESSAGELEN (64-sizeof(int)-sizeof(int));
 
-/* Returns an error or OK, message must be of length MESSAGELEN,
- * mid is the id of the message recieved.
- */
-void *
-recv(size_t *len);
+struct message {
+  int from;
+  int type;
+  uint8_t body[MESSAGELEN];
+};
+
+int
+sendnb(struct message *m);
+
+int
+recvnb(struct message *m);
 
 bool
 cas(void *addr, void *old, void *new);
-
-unsigned int
-atomicinc(unsigned int *addr);
-
-unsigned int
-atomicdec(unsigned int *addr);
 
 #define roundptr(x) (x % sizeof(void *) != 0 ?			 \
 		     x + sizeof(void *) - (x % sizeof(void *)) : \

@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2016 Mytchel Hammond <mytchel@openmailbox.org>
+ * Copyright (c) 2017 Mytchel Hammond <mytchel@openmailbox.org>
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -28,43 +28,53 @@
 #include <head.h>
 #include "fns.h"
 
+extern uint32_t *init_start;
+extern uint32_t *init_end;
+
 static int
 mainprocfunc(void *arg)
 {
-  uint8_t buf[] = "This is a test.";
-  size_t len = 32;
-  int i = 0;
-  
-  while (true) {
-    if (ksend(0, buf, len) != OK) {
-      continue;
+  reg_t va, pa;
+  int r;
+
+  va = 0x1000;
+  pa = (reg_t) &init_start;
+
+  while (pa < (reg_t) &init_end) {
+    r = mappingadd(up->addrspace, va, pa, PAGE_rw);
+    if (r != OK) {
+      printf("error mapping 0x%h -> 0x%h for init!\n",
+	     va, pa);
+      return ERR;
     }
 
-    if (i > 50) {
-      len = (len + 64) % 4096;
-      printf("bumping len up to %i\n", len);
-      i = 0;
-    } else {
-      i++;
-    }
+    va += PAGE_SIZE;
+    pa += PAGE_SIZE;
   }
 
+  printf("mappings done\n");
+  
   return OK;
 }
 
 void
 mainprocinit(void)
 {
-  struct page *info, *kstack, *mbox;
+  reg_t page, kstack, mboxpage, aspage;
+  struct mbox *mbox;
+  struct addrspace *addrspace;
   struct proc *p;
   
-  info = getrampage();
+  page = getrampage();
   kstack = getrampage();
-  mbox = getrampage();
+  mboxpage = getrampage();
+  aspage = getrampage();
 
-  p = procnew(info, kstack, mbox);
+  mbox = mboxnew(mboxpage);
+  addrspace = addrspacenew(aspage);
+
+  p = procnew(page, kstack, mbox, addrspace);
 
   forkfunc(p, &mainprocfunc, nil);
   procready(p);
 }
-

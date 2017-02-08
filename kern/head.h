@@ -31,6 +31,16 @@
 #include <string.h>
 
 
+/* Pages */
+
+struct pagel {
+  reg_t pa;
+  struct pagel *next;
+};
+
+#define PAGE_ro     0<<0
+#define PAGE_rw     1<<0
+ 
 /* Procs */
 
 
@@ -41,8 +51,11 @@ typedef enum {
   PROC_dead,
 } procstate_t;
 
+
+/* Can not excede PAGE_SIZE */
+
 struct proc {
-  struct proc *next; /* For global of procs */
+  struct proc *next; /* For global list of procs */
   struct proc *snext; /* For scheduler */
 
   struct label label;
@@ -50,16 +63,29 @@ struct proc {
   procstate_t state;
   int pid;
 
-  struct page *kstack;
-  struct page *info; /* Page this struct is stored in */
+  reg_t kstack;
+  struct stack ustack;
 
+  struct addrspace *addrspace;
   struct mbox *mbox;
 };
 
+
+/* Messages */
+
+struct mbox {
+  size_t head, tail;
+  struct message messages[];
+};
+
+
+/* Procs */
+
 struct proc *
-procnew(struct page *info,
-	struct page *kstack,
-	struct page *mbox);
+procnew(reg_t page,
+	reg_t kstack,
+	struct mbox *mbox,
+	struct addrspace *addrspace);
 
 void
 procexit(struct proc *p);
@@ -78,59 +104,10 @@ findproc(int pid);
 void
 schedule(void);
 
-
-/* Pages */
-
-
-struct page {
-  unsigned int refs;
-  reg_t pa;
-};
-
-struct mapping {
-  struct page *to;
-  reg_t va;
-#define PAGEMODE_ro     0
-#define PAGEMODE_rw     1
-  int mode;
-  struct mapping *next;
-};
-
-struct mappingtable {
-  struct page *page;
-  struct mappingtable *next;
-  size_t len;
-  struct mapping mappings[];
-};
-
-struct addrspace {
-  int refs;
-  struct page *page;
-  struct mappingtable *mappings;
-  size_t size;
-  struct mapping *table[];
-};
-
-
-
 /* Messages */
 
-struct mbox {
-  struct page *page;
-  size_t head, tail;
-  size_t mlen, dlen;
-  struct message **messages;
-  uint8_t *data;
-};
-
-struct message {
-  size_t rlen; /* Length of body taken from chunk */
-  size_t len; /* Length of filled body */
-  uint8_t body[];
-};
-
 struct mbox *
-mboxnew(struct page *page);
+mboxnew(reg_t page);
 
 void
 kmessagefree(struct message *m);
@@ -142,9 +119,7 @@ struct message *
 krecv(void);
 
 
-
 /* Mem */
-
 
 void *
 memmove(void *dest, const void *src, size_t len);
@@ -153,22 +128,10 @@ void *
 memset(void *dest, int c, size_t len);
 
 
-
-
-/****** Machine Implimented ******/
-
-
+/* Implimented by each arch */
 
 void
 puts(const char *);
-
-/* Number of ticks since last call. */
-uint32_t
-ticks(void);
-
-/* Clear ticks counter */
-void
-cticks(void);
 
 uint32_t
 tickstoms(uint32_t);
@@ -191,8 +154,32 @@ forkfunc(struct proc *, int (*func)(void *), void *);
 reg_t
 forkchild(struct proc *);
 
+struct addrspace *
+addrspacenew(reg_t page);
+
+void
+stackinit(struct stack *s);
+
+reg_t
+mappingfind(struct proc *p,
+	    reg_t va,
+	    int *flags);
+
+int
+mappingadd(struct addrspace *s,
+	   reg_t va,
+	   reg_t pa,
+	   int flags);
+
+int
+mappingremove(struct addrspace *s,
+	      reg_t va);
+
+void
+mmuswitch(struct proc *p);
+
 
 /****** Global Variables ******/
 
 extern struct proc *up;
-
+extern void *systab[NSYSCALLS];

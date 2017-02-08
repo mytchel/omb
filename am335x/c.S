@@ -1,5 +1,5 @@
 #
-#  Copyright (c) 2016 Mytchel Hammond <mytchel@openmailbox.org>
+#  Copyright (c) 2017 Mytchel Hammond <mytchel@openmailbox.org>
 #  
 #  Permission is hereby granted, free of charge, to any person
 #  obtaining a copy of this software and associated documentation
@@ -38,10 +38,6 @@
 
 @ Useful assembly functions
 .global cas
-.global atomicinc
-.global atomicdec
-
-.word 0x0
 
 _start:
 	bl main
@@ -98,26 +94,3 @@ cas:
 	
 	mov pc, lr
 
-
-atomicinc:
-	push {r1, r2, lr}
-1:
-	ldrex r2, [r0]
-	add r2, r2, #1
-	strex r1, r2, [r0]
-	cmp r1, #0
-	bne 1b
-	mov r0, r2
-	pop {r1, r2, pc}
-
-	
-atomicdec:
-	push {r1, r2, lr}
-1:	
-	ldrex r2, [r0]
-	sub r2, r2, #1
-	strex r1, r2, [r0]
-	cmp r1, #0
-	bne 1b
-	mov r0, r2
-	pop {r1, r2, pc}

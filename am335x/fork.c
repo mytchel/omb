@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2016 Mytchel Hammond <mytchel@openmailbox.org>
+ * Copyright (c) 2017 Mytchel Hammond <mytchel@openmailbox.org>
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -27,6 +27,7 @@
 
 #include <head.h>
 #include "fns.h"
+#include "trap.h"
 
 void
 forkfunc(struct proc *p, int (*func)(void *), void *arg)
@@ -34,7 +35,7 @@ forkfunc(struct proc *p, int (*func)(void *), void *arg)
   memset(&p->label, 0, sizeof(struct label));
 
   p->label.psr = MODE_SVC;
-  p->label.sp = (uint32_t) p->kstack->pa + PAGE_SIZE;
+  p->label.sp = (uint32_t) p->kstack + PAGE_SIZE;
   p->label.pc = (uint32_t) &funcloader;
 
   p->label.sp -= sizeof(uint32_t);
@@ -53,9 +54,9 @@ forkchild(struct proc *p)
   }
 
   s = p->label.sp;
-  d = up->kstack->pa + PAGE_SIZE - s;
+  d = up->kstack + PAGE_SIZE - s;
 
-  p->label.sp = p->kstack->pa + PAGE_SIZE - d;
+  p->label.sp = p->kstack + PAGE_SIZE - d;
   
   memmove((void *) p->label.sp, (void *) s, d);
 

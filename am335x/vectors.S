@@ -1,5 +1,5 @@
 #
-#  Copyright (c) <2016> Mytchel Hammond <mytchel@openmailbox.org>
+#  Copyright (c) 2017 Mytchel Hammond <mytchel@openmailbox.org>
 #  
 #  Permission is hereby granted, free of charge, to any person
 #  obtaining a copy of this software and associated documentation
@@ -30,8 +30,8 @@
 .global _start
 
 _start:
-	ldr r0, = _kernel_bss_start
-	ldr r1, = _kernel_bss_end
+	ldr r0, = kernel_bss_start
+	ldr r1, = kernel_bss_end
 	mov r2, #0
 	mov r3, #0
 1:
@@ -47,13 +47,13 @@ _start:
 	mcr p15, 0, r0, c1, c0, 0
 	
 	cps #MODE_IRQ
-	ldr sp, =_ex_stack_top
+	ldr sp, =ex_stack_top
 	cps #MODE_ABORT
-	ldr sp, =_ex_stack_top
+	ldr sp, =ex_stack_top
 	cps #MODE_UND
-	ldr sp, =_ex_stack_top
+	ldr sp, =ex_stack_top
 	cps #MODE_SVC
-	ldr sp, =_ex_stack_top
+	ldr sp, =ex_stack_top
 	
 	bl vectortableinit
 
@@ -86,8 +86,34 @@ vectortable:
 
 
 swi_ex:
-	b swi_ex
+	stmfd sp!, {r9, r10, r11, lr}
 
+	mrs r9, spsr
+
+	cpsid if, #MODE_SYS
+
+	mov r10, sp
+	mov r11, lr
+	
+	cpsie if, #MODE_SVC
+
+	ldr lr, =systab
+	add r12, lr, r12, lsl #2
+	ldr lr, =1f
+	ldr pc, [r12]
+	
+1:
+	cpsid if, #MODE_SYS
+
+	mov sp, r10
+	mov lr, r11
+	
+	cpsid if, #MODE_SVC
+
+	msr spsr, r9
+	ldmfd sp!, {r9, r10, r11, pc}^
+
+	
 irq_ex:
 	stmfd sp, {r0 - r4}
 	sub r0, lr, #4

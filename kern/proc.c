@@ -76,6 +76,7 @@ schedule(void)
       ;
  } else {
     up->state = PROC_oncpu;
+    mmuswitch(up);
     gotolabel(&up->label);
   }
 }
@@ -125,21 +126,23 @@ removefromlist(struct proc **l, struct proc *p)
 }
 	
 struct proc *
-procnew(struct page *info,
-	struct page *kstack,
-	struct page *mbox)
+procnew(reg_t page,
+	reg_t kstack,
+	struct mbox *mbox,
+	struct addrspace *addrspace)
 {
   struct proc *p;
 	
-  p = (struct proc *) info->pa;
+  p = (struct proc *) page;
 
   p->pid = nextpid++;
 
-  p->info = info;
   p->kstack = kstack;
+  p->mbox = mbox;
+  p->addrspace = addrspace;
 
-  p->mbox = mboxnew(mbox);
- 
+  stackinit(&p->ustack);
+
   p->state = PROC_suspend;
 
   do {
@@ -153,11 +156,8 @@ void
 procexit(struct proc *p)
 {
   printf("proc exit %i\n", p->pid);
-  
-  /*
-  pagefree(p->kstack);
-  pagefree(p->info);
-  */
+
+  /* TODO: free pages and resources */
 
   if (p->state == PROC_ready) {
     removefromlist(&ready, p);

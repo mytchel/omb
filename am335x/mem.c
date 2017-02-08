@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2016 Mytchel Hammond <mytchel@openmailbox.org>
+ * Copyright (c) 2017 Mytchel Hammond <mytchel@openmailbox.org>
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -34,10 +34,10 @@ addrampages(uint32_t, uint32_t);
 static void
 addiopages(uint32_t, uint32_t);
 
-extern uint32_t *_ram_start;
-extern uint32_t *_ram_end;
-extern uint32_t *_kernel_start;
-extern uint32_t *_kernel_end;
+extern uint32_t *ram_start;
+extern uint32_t *ram_end;
+extern uint32_t *kernel_start;
+extern uint32_t *kernel_end;
 
 struct pageholder *rampages = nil;
 struct pageholder *iopages = nil;
@@ -45,11 +45,11 @@ struct pageholder *iopages = nil;
 void
 memoryinit(void)
 {
-  addrampages(PAGE_ALIGN((uint32_t) &_kernel_end + PAGE_SIZE - 1),
-	      (uint32_t) &_ram_end);
+  addrampages(PAGE_ALIGN((uint32_t) &kernel_end + PAGE_SIZE - 1),
+	      (uint32_t) &ram_end);
   
-  addrampages((uint32_t) &_ram_start,
-	      PAGE_ALIGN((uint32_t) &_kernel_start));
+  addrampages((uint32_t) &ram_start,
+	      PAGE_ALIGN((uint32_t) &kernel_start));
 
   addiopages(0x47400000, 0x47404000); /* USB */
   addiopages(0x44E31000, 0x44E32000); /* DMTimer1 */
@@ -71,7 +71,7 @@ memoryinit(void)
   mmuinit();
 
   /* Give kernel unmapped access to all of ram. */	
-  imap(&_ram_start, &_ram_end, AP_RW_NO, true);
+  imap(&ram_start, &ram_end, AP_RW_NO, true);
 
   /* UART0, given to both kernel and possibly users. This may change */
   imap((void *) 0x44E09000, (void *) 0x44E0A000, AP_RW_NO, false);
@@ -92,8 +92,7 @@ initpages(struct pageholder *p, struct pageholder **from, size_t npages,
   size_t i;
 
   for (i = 0; i < npages; i++) {
-    p[i].p.refs = 0;
-    p[i].p.pa = start;
+    p[i].pa = start;
     p[i].type = type;
     p[i].next = &p[i+1];
 
@@ -131,7 +130,7 @@ addrampages(uint32_t start, uint32_t end)
 void
 addiopages(uint32_t start, uint32_t end)
 {
-  static struct page *holder = nil;
+  static reg_t holder = 0;
   static size_t used = 0;
 
   struct pageholder *p;
@@ -140,9 +139,9 @@ addiopages(uint32_t start, uint32_t end)
   npages = (end - start) / PAGE_SIZE;
 
   while (npages > 0) {
-    if (holder == nil || (used + sizeof(struct pageholder)) > PAGE_SIZE) {
+    if (holder == 0 || (used + sizeof(struct pageholder)) > PAGE_SIZE) {
       holder = getrampage();
-      if (holder != nil) {
+      if (holder != 0) {
 	used = 0;
       } else {
 	puts("kernel failed to get a page!\n");
@@ -157,7 +156,7 @@ addiopages(uint32_t start, uint32_t end)
       cpages = npages;
     }
 
-    p = (struct pageholder *) (holder->pa + used);
+    p = (struct pageholder *) (holder + used);
 
     initpages(p, &iopages, cpages, start, PAGE_io);
 
@@ -167,7 +166,7 @@ addiopages(uint32_t start, uint32_t end)
 }
 
 
-struct page *
+reg_t
 getrampage(void)
 {
   struct pageholder *p;
@@ -176,7 +175,36 @@ getrampage(void)
     p = rampages;
   } while (!cas(&rampages, p, p->next));
 
-  p->p.refs = 1;
-  return &p->p;
+  return p->pa;
 }
 
+reg_t
+getsegment(size_t len)
+{
+  struct memresp *resp;
+  struct message *m;
+  struct memreq req;
+  int r;
+
+  req.type = MEMREQ_kern;
+  req.pid = up->pid;
+  req.len = len;
+
+  r = kmessage(0, &req, sizeof(struct memreq));
+  if (r != OK) {
+    return nil;
+  }
+
+  do {
+    m = krecv();
+    if (m == nil) {
+      continue;
+    }
+
+    resp = (struct memresp *) m->body;
+  } while (resp
+
+  
+  
+
+}

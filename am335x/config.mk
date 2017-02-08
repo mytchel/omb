@@ -13,7 +13,7 @@ CFLAGS := -std=c89 -O3 \
 	-mcpu=cortex-a8 \
 	-nostdinc -ffreestanding \
         -D_$(TARGET)_ \
-	-Iinclude -I../include
+	-Iinclude -I../include -I.
 
 LDFLAGS += -nostdlib -nodefaultlibs -static \
 	-L/usr/local/lib/gcc/arm-none-eabi/4.9.3/ \
