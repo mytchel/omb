@@ -68,7 +68,7 @@ schedule(void)
   }
 
   up = nextproc();
-  setsystick(mstoticks(10));
+  setsystick(mstoticks(1000));
 
   if (up == nil) {
     puts("no procs to run\n");
@@ -155,8 +155,6 @@ procnew(reg_t page,
 void
 procexit(struct proc *p)
 {
-  printf("proc exit %i\n", p->pid);
-
   /* TODO: free pages and resources */
 
   if (p->state == PROC_ready) {
@@ -166,7 +164,39 @@ procexit(struct proc *p)
   removefromlist(&procs, p);
 
   if (p == up) {
+    /* TODO: disable intr */
     up = nil;
+    schedule();
+  }
+}
+
+void
+procsuspend(struct proc *p)
+{
+  if (p->state == PROC_ready) {
+    removefromlist(&ready, p);
+  }
+  
+  p->state = PROC_suspend;
+
+  if (p == up) {
+    /* TODO: disable intr */
+    schedule();
+  }
+}
+
+void
+procrecv(struct proc *p)
+{
+  if (p->state == PROC_ready) {
+    removefromlist(&ready, p);
+  }
+  
+  p->state = PROC_recv;
+
+  if (p == up) {
+    /* TODO: disable intr */
+    schedule();
   }
 }
 
@@ -179,16 +209,6 @@ procready(struct proc *p)
 
   p->state = PROC_ready;
   addtolistback(&ready, p);
-}
-
-void
-procsuspend(struct proc *p)
-{
-  if (p->state == PROC_ready) {
-    removefromlist(&ready, p);
-  }
-  
-  p->state = PROC_suspend;
 }
 
 struct proc *

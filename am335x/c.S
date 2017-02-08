@@ -33,8 +33,8 @@
 .global exit
 .global fork
 .global getpid
-.global send
-.global recv
+.global sendnb
+.global recvnb
 
 @ Useful assembly functions
 .global cas
@@ -65,16 +65,16 @@ getpid:
 	pop {r12, pc}
 
 
-send:
+sendnb:
 	push {r12, lr}
-	mov r12, #SYSCALL_SEND
+	mov r12, #SYSCALL_SENDNB
 	svc 0
 	pop {r12, pc}
 
 	
-recv:
+recvnb:
 	push {r12, lr}
-	mov r12, #SYSCALL_RECV
+	mov r12, #SYSCALL_RECVNB
 	svc 0
 	pop {r12, pc}
 

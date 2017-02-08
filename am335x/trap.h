@@ -25,16 +25,23 @@
  *
  */
 
-#ifndef _SYSCALLS_H_
-#define _SYSCALLS_H_
+#ifndef _TRAP_H_
+#define _TRAP_H_
 
-#define SYSCALL_EXIT            1
-#define SYSCALL_FORK            2
-#define SYSCALL_GETPID          3 
+#define MODE_SVC		19
+#define MODE_FIQ		17
+#define MODE_IRQ		18
+#define MODE_ABORT		23
+#define MODE_UND		27
+#define MODE_SYS		31
+#define MODE_USR		16
 
-#define SYSCALL_SENDNB          4 
-#define SYSCALL_RECVNB          5
+#define MODE_DI              (1<<7)
+#define MODE_DF              (1<<6)
 
-#define NSYSCALLS               6
+#define ABORT_INTERRUPT		0
+#define ABORT_INSTRUCTION	1
+#define ABORT_PREFETCH		2
+#define ABORT_DATA	 	3
 
 #endif

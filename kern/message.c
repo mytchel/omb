@@ -30,150 +30,109 @@
 struct mbox *
 mboxnew(reg_t page)
 {
-  struct message *mm;
   struct mbox *m;
 
   m = (struct mbox *) page;
+
   m->head = 0;
-  m->tail = 0;
+  m->rtail = 0;
+  m->wtail = 0;
 
-  m->messages = (struct message **) (page + sizeof(struct mbox));
-  m->mlen = PAGE_SIZE / 4 / sizeof(struct message);
-
-  m->data = (uint8_t *) m->messages + m->mlen * sizeof(struct message);
-  m->dlen = PAGE_SIZE - sizeof(struct mbox)
-    - m->mlen * sizeof(struct message);
-
-  mm = (struct message *) m->data;
-  mm->rlen = m->dlen - sizeof(struct message);
-  mm->len = 0;
-
+  m->len = (PAGE_SIZE - sizeof(struct mbox)) / sizeof(struct message);
+  memset(m->messages, 0, m->len * sizeof(struct message));
+  
   return m;
 }
 
-static struct message *
-findandfillspot(struct mbox *mbox, void *buf, size_t len)
-{
-  size_t olen, rlen, nlen;
-  struct message *m, *n;
-
-  rlen = roundptr(len);
-
-  m = (struct message *) mbox->data;
-  while ((uint8_t *) m < mbox->data + mbox->dlen) {
-    olen = m->rlen;
-    n = (struct message *) ((uint8_t *) m +
-			    sizeof(struct message) +
-			    olen);
-
-    if (m->len == 0) {
-      /* If next is free join it with this then check again */
-      if (((uint8_t *) n < mbox->data + mbox->dlen) && (n->len == 0)) {
-	nlen = olen + sizeof(struct message) + n->rlen;
-	cas(&m->rlen, (void *) olen, (void *) nlen);
-	continue;
-      }
-
-      if (rlen <= olen) {
-	if (cas(&m->len, (void *) 0, (void *) len)) {
-
-	  /* Create new free chunk with excess if there is any */
-	  if (sizeof(struct message) + rlen < olen) {
-	    n = (struct message *) ((uint8_t *) m +
-				    sizeof(struct message) +
-				    rlen);
-
-	    n->rlen = olen - (sizeof(struct message) + rlen);
-	    n->len = 0;
-
-	    m->rlen = rlen;
-	  }
-
-	  memmove(m->body, buf, len);
-	  return m;
-	} else {
-	  continue;
-	}
-      }
-    }
-
-    m = n;
-  }
-
-  return nil;
-}
-
-void
-kmessagefree(struct message *m)
-{
-  /* Mark position free */
-  m->len = 0;
-}
-
 int
-ksend(int pid, void *buf, size_t len)
+ksendnb(int to, struct message *m)
 {
-  struct message *m, *o;
   size_t otail, ntail;
   struct mbox *mbox;
   struct proc *p;
 
-  p = findproc(pid);
+  m->from = up->pid;
+  
+  p = findproc(to);
   if (p == nil) {
     return ERR;
   }
 
   mbox = p->mbox;
 
-  m = findandfillspot(mbox, buf, len);
-  if (m == nil) {
-    return ERR;
-  }
-
- try:
-  otail = mbox->tail;
-  ntail = (otail + 1) % mbox->mlen;
+  otail = mbox->wtail;
+  ntail = (otail + 1) % mbox->len;
 
   if (ntail == mbox->head) {
-    kmessagefree(m);
     return ERR;
   }
 
-  o = mbox->messages[otail];
-  if (cas(&mbox->messages[otail], o, m)) {
-    if (cas(&mbox->tail, (void *) otail, (void *) ntail)) {
-      return OK;
-    } else {
-      goto try;
-    }
-  } else {
-    goto try;
+  if (!cas(&mbox->wtail, (void *) otail, (void *) ntail)) {
+    return ERR;
   }
   
-  return ERR;
+  memmove(&mbox->messages[otail], m, sizeof(struct message));
+
+  do {
+    otail = mbox->rtail;
+    ntail = (otail + 1) % mbox->len;
+  } while (!cas(&mbox->rtail, (void *) otail, (void *) ntail));
+
+  if (p->state == PROC_recv) {
+    procready(p);
+  }
+  
+  return OK;
 }
 
-struct message *
-krecv(void)
+int
+ksend(int to, struct message *m)
 {
-  struct message *m;
+  /* This is wasteful */
+  
+  while (ksendnb(to, m) != OK)
+    ;
+
+  return OK;
+}
+
+int
+krecvnb(struct message *m)
+{
   struct mbox *mbox;
   size_t h, n;
-  
- try:
+
   mbox = up->mbox;
 
   h = mbox->head;
-  if (h == mbox->tail) {
-    return nil;
+  if (h == mbox->rtail) {
+    return ERR;
   }
 
-  n = (h + 1) % mbox->mlen;
-  
-  m = mbox->messages[h];
+  n = (h + 1) % mbox->len;
+    
+  memmove(m, &mbox->messages[h], sizeof(struct message));
+
   if (cas(&mbox->head, (void *) h, (void *) n)) {
-    return m;
+    return OK;
   } else {
-    goto try;
+    return ERR;
+  }
+}
+
+int
+krecv(struct message *m)
+{
+  intr_t i;
+    
+  while (true) {
+    if (krecvnb(m) == OK) {
+      return OK;
+    } else {
+      i = setintr(INTR_off);
+      procrecv(up);
+      schedule();
+      setintr(i);
+    }
   }
 }

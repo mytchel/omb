@@ -29,20 +29,46 @@
 #include "fns.h"
 
 static int
+handlekern(struct message *in, struct message *out)
+{
+  struct memresp_kern *resp;
+
+  printf("%i wants a page for kernel use\n", in->from);
+
+  out->type = MEMREQ_kern;
+  
+  resp = (struct memresp_kern *) out->body;
+  resp->start = getrampage();
+
+  return OK;
+}
+
+static int (*handle[MEMREQ_max])(struct message *in,
+		     struct message *out) = {
+  [MEMREQ_kern] = handlekern,
+};
+
+static int
 memprocfunc(void *arg)
 {
-  struct message *message;
+  struct message in, out;
   
   while (true) {
-    message = krecv();
-    if (message == nil) {
-    } else {
-      printf("mem got %i\n", message->len);
-      kmessagefree(message);
+    if (krecv(&in) == OK) {
+      printf("mem got message from %i, type %i\n", in.from, in.type);
+ 
+      if (in.type > MEMREQ_max || in.type < 0) {
+	continue;
+      }
+
+      if (handle[in.type](&in, &out) == OK) {
+	printf("mem sending response to %i\n", in.from);
+	ksend(in.from, &out);
+      }
     }
   }
 
-  return OK;
+  return ERR;
 }
 
 void

@@ -26,6 +26,7 @@
  */
 
 #include <libc.h>
+#include <message.h>
 #include <syscalls.h>
 #include <stdarg.h>
 #include <string.h>
@@ -48,6 +49,7 @@ typedef enum {
   PROC_oncpu,
   PROC_suspend,
   PROC_ready,
+  PROC_recv,
   PROC_dead,
 } procstate_t;
 
@@ -74,7 +76,8 @@ struct proc {
 /* Messages */
 
 struct mbox {
-  size_t head, tail;
+  size_t head, rtail, wtail;
+  size_t len;
   struct message messages[];
 };
 
@@ -96,6 +99,9 @@ procready(struct proc *p);
 void
 procsuspend(struct proc *p);
 
+void
+procrecv(struct proc *p);
+
 struct proc *
 findproc(int pid);
 
@@ -109,14 +115,17 @@ schedule(void);
 struct mbox *
 mboxnew(reg_t page);
 
-void
-kmessagefree(struct message *m);
+int
+ksendnb(int pid, struct message *m);
 
 int
-ksend(int pid, void *message, size_t len);
+ksend(int pid, struct message *m);
 
-struct message *
-krecv(void);
+int
+krecvnb(struct message *m);
+
+int
+krecv(struct message *m);
 
 
 /* Mem */
@@ -132,6 +141,12 @@ memset(void *dest, int c, size_t len);
 
 void
 puts(const char *);
+
+intr_t
+setintr(intr_t i);
+
+reg_t
+kgetpage(void);
 
 uint32_t
 tickstoms(uint32_t);
@@ -149,6 +164,10 @@ int
 gotolabel(struct label *) __attribute__((noreturn));
 
 void
+droptouser(struct label *u, reg_t ksp)
+  __attribute__((noreturn));
+
+void
 forkfunc(struct proc *, int (*func)(void *), void *);
 
 reg_t
@@ -159,6 +178,9 @@ addrspacenew(reg_t page);
 
 void
 stackinit(struct stack *s);
+
+int
+fixfault(reg_t addr);
 
 reg_t
 mappingfind(struct proc *p,

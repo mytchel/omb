@@ -26,12 +26,30 @@
 .SUFFIXES:
 .SUFFIXES: .c .S .h .o .a .elf .bin .list .umg
 
-include config.mk
+TARGET = am335x
+
+CROSS = arm-none-eabi-
+
+CC = $(CROSS)gcc
+LD = $(CROSS)ld
+AR := $(CROSS)ar
+OBJCOPY = $(CROSS)objcopy
+OBJDUMP = $(CROSS)objdump
+
+CFLAGS := -std=c89 -O3 \
+	-Wall -Werror \
+	-mcpu=cortex-a8 \
+	-nostdinc -ffreestanding \
+	-Iinclude -I../include -I.
+
+LDFLAGS += -nostdlib -nodefaultlibs -static \
+	-L/usr/local/lib/gcc/arm-none-eabi/4.9.3/
 
 loadaddr=0x82000000
 
 .PHONY: all
 all: am335x.list am335x.umg
+
 CLEAN += am335x.umg am335x.list init.list
 
 
@@ -69,7 +87,8 @@ KSRC_C := \
         ../kern/syscall.c       \
         ../kern/string.c        \
         ../kern/printf.c        \
-        ../kern/proc.c
+        ../kern/proc.c          \
+	_init.c
 
 KOBJECTS := \
 	$(KSRC_A:%.S=%.o) \
@@ -95,22 +114,22 @@ CLEAN += $(KOBJECTS)
 	$(OBJDUMP) -S $< > $@
 
 
-CLEAN += init.elf init.list
 init.elf: init.ld $(IOBJECTS)
 	$(LD) $(LDFLAGS) \
-		-T init.ld \
+		-T init.ld -Ttext 0x1000 \
 		-o $@ $(IOBJECTS) -lgcc
 
-CLEAN += init.bin _init.o
-_init.o: init.bin
-	$(OBJCOPY) --strip-all init.elf _init.o
+
+CLEAN += _init.c init.bin init.elf 
+_init.c: init.bin
+	cat init.bin | ../tools/bintoarray/bintoarray initcode > _init.c
 
 
 CLEAN += $(TARGET).elf $(TARGET).list
-am335x.elf: kernel.ld $(KOBJECTS) _init.o
+am335x.elf: kernel.ld $(KOBJECTS)
 	$(LD) $(LDFLAGS) \
 		-T kernel.ld -Ttext $(loadaddr) \
-		-o $@ $(KOBJECTS) -lgcc _init.o
+		-o $@ $(KOBJECTS) -lgcc
 
 
 CLEAN += am335x.elf am335x.bin

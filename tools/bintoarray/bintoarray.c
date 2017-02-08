@@ -34,7 +34,9 @@ main(int argc, char *argv[])
 	char b;
 	int l = 0;
 	
-	printf("char %s[] = {", argv[1]);
+	printf("char %s[]__attribute__((__aligned__(4*1024))) = {",
+	       argv[1]);
+
 	while (read(0, &b, sizeof(char)) > 0) {
 		printf("%i,", b);
 		l++;

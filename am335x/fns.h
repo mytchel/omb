@@ -47,7 +47,7 @@ funcloader(void);
 uint32_t
 fsrstatus(void);
 
-void *
+reg_t
 faultaddr(void);
 
 void

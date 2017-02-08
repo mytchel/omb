@@ -45,20 +45,6 @@ fork(unsigned int flags);
 int
 getpid(void);
 
-#define MESSAGELEN (64-sizeof(int)-sizeof(int));
-
-struct message {
-  int from;
-  int type;
-  uint8_t body[MESSAGELEN];
-};
-
-int
-sendnb(struct message *m);
-
-int
-recvnb(struct message *m);
-
 bool
 cas(void *addr, void *old, void *new);
 

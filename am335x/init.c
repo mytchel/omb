@@ -25,16 +25,15 @@
  *
  */
 
-#ifndef _SYSCALLS_H_
-#define _SYSCALLS_H_
+#include <libc.h>
+#include <message.h>
 
-#define SYSCALL_EXIT            1
-#define SYSCALL_FORK            2
-#define SYSCALL_GETPID          3 
+int
+main(void)
+{
+  getpid();
+  
+  while (true)
+    ;
+}
 
-#define SYSCALL_SENDNB          4 
-#define SYSCALL_RECVNB          5
-
-#define NSYSCALLS               6
-
-#endif

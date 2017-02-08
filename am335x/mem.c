@@ -165,7 +165,6 @@ addiopages(uint32_t start, uint32_t end)
   }
 }
 
-
 reg_t
 getrampage(void)
 {
@@ -179,32 +178,23 @@ getrampage(void)
 }
 
 reg_t
-getsegment(size_t len)
+kgetpage(void)
 {
-  struct memresp *resp;
-  struct message *m;
-  struct memreq req;
-  int r;
+  struct memresp_kern *resp;
+  struct message m;
 
-  req.type = MEMREQ_kern;
-  req.pid = up->pid;
-  req.len = len;
-
-  r = kmessage(0, &req, sizeof(struct memreq));
-  if (r != OK) {
+  m.type = MEMREQ_kern;
+  
+  if (ksend(0, &m) != OK) {
     return nil;
   }
 
   do {
-    m = krecv();
-    if (m == nil) {
-      continue;
-    }
+    while (krecv(&m) != OK)
+      ;
 
-    resp = (struct memresp *) m->body;
-  } while (resp
+    resp = (struct memresp_kern *) m.body;
+  } while (m.type != MEMREQ_kern);
 
-  
-  
-
+  return resp->start;
 }

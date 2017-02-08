@@ -12,14 +12,10 @@ CFLAGS := -std=c89 -O3 \
 	-Wall -Werror \
 	-mcpu=cortex-a8 \
 	-nostdinc -ffreestanding \
-        -D_$(TARGET)_ \
 	-Iinclude -I../include -I.
 
 LDFLAGS += -nostdlib -nodefaultlibs -static \
-	-L/usr/local/lib/gcc/arm-none-eabi/4.9.3/ \
-	-L$(BASE)/lib
-
-LDSCRIPT := -T $(BASE)/$(TARGET)/c.ld
+	-L/usr/local/lib/gcc/arm-none-eabi/4.9.3/
 
 # Compiler chain for build tools
 

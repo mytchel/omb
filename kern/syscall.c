@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2017 Mytchel Hammond <mytchel@openmailbox.org>
+ * Copyright (c) 2016 Mytchel Hammond <mytchel@openmailbox.org>
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -25,16 +25,47 @@
  *
  */
 
-#ifndef _SYSCALLS_H_
-#define _SYSCALLS_H_
+#include <head.h>
 
-#define SYSCALL_EXIT            1
-#define SYSCALL_FORK            2
-#define SYSCALL_GETPID          3 
+reg_t
+sysexit(void)
+{
+  printf("%i called exit\n", up->pid);
+  return ERR;
+}
 
-#define SYSCALL_SENDNB          4 
-#define SYSCALL_RECVNB          5
+reg_t
+sysfork(int flags, struct label *regs)
+{
+  printf("%i called fork\n", up->pid);
+  return ERR;
+}
 
-#define NSYSCALLS               6
+reg_t
+sysgetpid(void)
+{
+  printf("%i called getpid\n", up->pid);
+  return up->pid;
+}
 
-#endif
+reg_t
+syssendnb(int *status)
+{
+  printf("%i called sendnb\n", up->pid);
+  return ERR;
+}
+
+reg_t
+sysrecvnb(int *status)
+{
+  printf("%i called recvnb\n", up->pid);
+  return ERR;
+}
+
+void *systab[NSYSCALLS] = {
+  [SYSCALL_EXIT]              = (void *) &sysexit,
+  [SYSCALL_FORK]              = (void *) &sysfork,
+  [SYSCALL_GETPID]            = (void *) &sysgetpid,
+  [SYSCALL_SENDNB]            = (void *) &syssendnb,
+  [SYSCALL_RECVNB]            = (void *) &sysrecvnb,
+};

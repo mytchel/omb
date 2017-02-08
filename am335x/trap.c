@@ -133,10 +133,10 @@ irqhandler(void)
 }
 
 void
-trap(void *pc, int type)
+trap(reg_t pc, int type)
 {
   uint32_t fsr;
-  void *addr;
+  reg_t addr;
 
   switch(type) {
   case ABORT_INTERRUPT:
@@ -150,19 +150,50 @@ trap(void *pc, int type)
 
   case ABORT_PREFETCH:
     printf("%i prefetch abort at 0x%h\n", up->pid, pc);
+
+    if (fixfault(pc) == OK) {
+      return;
+    }
+
     break;
 
   case ABORT_DATA:
     addr = faultaddr();
     fsr = fsrstatus() & 0xf;
-    
+
     printf("%i data abort at 0x%h for 0x%h type 0x%h\n", up->pid, pc, addr, fsr);
+    
+    switch (fsr) {
+    case 0x5: /* section translation */
+    case 0x7: /* page translation */
+      if (fixfault(addr) == OK) {
+	return;
+      }
+      
+      break;
+    case 0x0: /* vector */
+    case 0x1: /* alignment */
+    case 0x3: /* also alignment */
+    case 0x2: /* terminal */
+    case 0x4: /* external linefetch section */
+    case 0x6: /* external linefetch page */
+    case 0x8: /* external non linefetch section */
+    case 0xa: /* external non linefetch page */
+    case 0x9: /* domain section */
+    case 0xb: /* domain page */
+    case 0xc: /* external translation l1 */
+    case 0xe: /* external translation l2 */
+    case 0xd: /* section permission */
+    case 0xf: /* page permission */
+    default:
+      break;
+    }
+
     break;
   }
 
   printf("killing proc %i\n", up->pid);
   procexit(up);
-  schedule();
   
   /* Never reached */
 }

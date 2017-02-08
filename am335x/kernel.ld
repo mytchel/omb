@@ -1,3 +1,5 @@
+ENTRY(_start);
+
 SECTIONS
 {
 	. = 0x80000000;
@@ -35,16 +37,6 @@ SECTIONS
 	ex_stack_top = .;
 
 	kernel_end = .;
-
-	.init ALIGN(4096) :
-	{
-		init_start = .;
-
-		_init.o(*)
-
-		. = ALIGN(4096);
-		init_end = .;
-	}
 
 	. = 0xa0000000;
 	ram_end = .;

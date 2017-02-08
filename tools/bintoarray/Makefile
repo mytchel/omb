@@ -23,15 +23,12 @@
 #  OTHER DEALINGS IN THE SOFTWARE
 #
 
-BASE ?= ../..
-include $(BASE)/config.mk
-
 src = bintoarray.c
 
 bintoarray: $(src)
-	@$(HOSTCC) $(HOSTCFLAGS) -o $@ $(src) $(HOSTLDFLAGS)
+	$(CC) $(CFLAGS) -o $@ $(src) $(LDFLAGS)
 
 
 .PHONY: clean
 clean:
-	@rm -f bintoarray
+	rm -f bintoarray

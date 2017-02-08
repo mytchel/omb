@@ -1,4 +1,4 @@
-/*
+#/*
  *
  * Copyright (c) 2017 Mytchel Hammond <mytchel@openmailbox.org>
  * 
@@ -25,16 +25,31 @@
  *
  */
 
-#ifndef _SYSCALLS_H_
-#define _SYSCALLS_H_
+#ifndef _MESSAGE_H_
+#define _MESSAGE_H_
 
-#define SYSCALL_EXIT            1
-#define SYSCALL_FORK            2
-#define SYSCALL_GETPID          3 
+#define MESSAGEBODY (64-sizeof(int)-sizeof(int))
 
-#define SYSCALL_SENDNB          4 
-#define SYSCALL_RECVNB          5
+struct message {
+  int from;
+  int type;
+  uint8_t body[MESSAGEBODY];
+};
 
-#define NSYSCALLS               6
+int
+sendnb(int to, struct message *m);
+
+int
+recvnb(struct message *m);
+
+
+
+#define MEMREQ_kern     1
+#define MEMREQ_max      2
+
+
+struct memresp_kern {
+  reg_t start;
+};
 
 #endif

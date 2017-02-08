@@ -97,6 +97,8 @@ swi_ex:
 	
 	cpsie if, #MODE_SVC
 
+@ TODO: add check that r12 is valid
+	
 	ldr lr, =systab
 	add r12, lr, r12, lsl #2
 	ldr lr, =1f

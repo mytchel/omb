@@ -27,6 +27,7 @@
 
 .section .text
 
+.global setintr
 .global setlabel
 .global gotolabel
 .global droptouser
@@ -41,6 +42,18 @@
 .global mmudisable
 .global mmuinvalidate
 .global cas
+
+
+setintr:
+	push {r1, lr}
+	mrs r1, cpsr
+	cmp r0, #MODE_DI
+	orreq r0, r1, #MODE_DI @ disable intr
+	bicne r0, r1, #MODE_DI @ or enable intr
+	msr cpsr, r0
+	and r0, r1, #MODE_DI
+	pop {r1, pc}
+
 
 setlabel:
 	mrs r1, cpsr
@@ -82,6 +95,7 @@ funcloader:
 1:
 	b 1b
 
+	
 fsrstatus:
 	mrc p15, 0, r0, c5, c0, 0
 	mov pc, lr
@@ -144,6 +158,7 @@ mmudisable:
 	mcr p15, 0, r0, c1, c0, 0
 	mov pc, lr
 
+	
 @bool
 @cas(void *addr, void *old, void *new);
 cas:

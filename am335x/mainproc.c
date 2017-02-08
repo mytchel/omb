@@ -27,32 +27,43 @@
 
 #include <head.h>
 #include "fns.h"
+#include "trap.h"
 
-extern uint32_t *init_start;
-extern uint32_t *init_end;
+extern char initcode[];
+extern size_t initcodelen;
 
 static int
 mainprocfunc(void *arg)
 {
-  reg_t va, pa;
+  struct label u;
+  reg_t va, pa, o;
   int r;
 
   va = 0x1000;
-  pa = (reg_t) &init_start;
+  pa = (reg_t) &initcode;
 
-  while (pa < (reg_t) &init_end) {
-    r = mappingadd(up->addrspace, va, pa, PAGE_rw);
+  printf("init start at 0x%h len %i\n", pa, initcodelen);
+
+  for (o = 0; o < initcodelen; o += PAGE_SIZE) {
+    printf("map from 0x%h to 0x%h\n", va + o, pa + o);
+    r = mappingadd(up->addrspace, va + o, pa + o, PAGE_rw);
     if (r != OK) {
       printf("error mapping 0x%h -> 0x%h for init!\n",
-	     va, pa);
+	     va + o, pa + o);
       return ERR;
     }
-
-    va += PAGE_SIZE;
-    pa += PAGE_SIZE;
   }
 
-  printf("mappings done\n");
+  memset(&u, 0, sizeof(struct label));
+  u.psr = MODE_USR;
+  u.sp = USTACK_TOP;
+  u.pc = va;
+  
+  printf("drop to user at 0x%h, ustack at 0x%h, kstack at 0x%h\n",
+	 u.pc, u.sp, up->kstack + PAGE_SIZE);
+
+  mmuswitch(up);
+  droptouser(&u, up->kstack + PAGE_SIZE);
   
   return OK;
 }

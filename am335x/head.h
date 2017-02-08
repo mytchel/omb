@@ -25,16 +25,64 @@
  *
  */
 
-#ifndef _SYSCALLS_H_
-#define _SYSCALLS_H_
+#include "types.h"
+#include "trap.h"
 
-#define SYSCALL_EXIT            1
-#define SYSCALL_FORK            2
-#define SYSCALL_GETPID          3 
+#define USTACK_TOP	 0x20000000
 
-#define SYSCALL_SENDNB          4 
-#define SYSCALL_RECVNB          5
+#define TICKS_MIN        20
+#define QUANTA_MAX      100
+#define QUANTA_DEF       50
+#define QUANTA_MIN       10
 
-#define NSYSCALLS               6
+#define PAGE_SHIFT 	 12
+#define PAGE_SIZE	 (1UL << PAGE_SHIFT)
+#define PAGE_MASK	 (~(PAGE_SIZE - 1))
+#define PAGE_ALIGN(x)    (((x) + PAGE_SIZE - 1) & PAGE_MASK)
+#define PAGE_ALIGN_DN(x) (((x) - PAGE_SIZE + 1) & PAGE_MASK)
 
-#endif
+
+struct label {
+  uint32_t psr, sp, lr;
+  uint32_t regs[13];
+  uint32_t pc;
+} __attribute__((__packed__));
+
+
+typedef enum {
+  INTR_on  = (uint32_t) 0,
+  INTR_off = (uint32_t) MODE_DI,
+} intr_t;
+
+
+typedef enum {
+  PAGE_ram,
+  PAGE_io,
+} page_t;
+
+
+struct pageholder {
+  reg_t pa;
+  page_t type;
+  struct pageholder *next;
+};
+
+
+struct stack {
+  reg_t top, bottom, l2;
+};
+
+
+struct l2 {
+  reg_t va;
+  reg_t pa;
+};
+
+
+struct addrspace {
+  int refs;
+  size_t l2len;
+  struct l2 l2[];
+};
+
+#include "../../kern/head.h"
