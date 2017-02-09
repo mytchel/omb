@@ -40,7 +40,13 @@ int
 sendnb(int to, struct message *m);
 
 int
+send(int to, struct message *m);
+
+int
 recvnb(struct message *m);
+
+int
+recv(struct message *m);
 
 
 

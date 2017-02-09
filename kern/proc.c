@@ -59,7 +59,6 @@ schedule(void)
     if (up->state == PROC_oncpu) {
       up->state = PROC_ready;
       addtolistback(&ready, up);
-    } else {
     }
     
     if (setlabel(&up->label)) {
@@ -68,12 +67,10 @@ schedule(void)
   }
 
   up = nextproc();
-  setsystick(mstoticks(1000));
+  setsystick(mstoticks(100));
 
   if (up == nil) {
-    puts("no procs to run\n");
-    while (true)
-      ;
+    nilfunc();
  } else {
     up->state = PROC_oncpu;
     mmuswitch(up);
@@ -155,12 +152,16 @@ procnew(reg_t page,
 void
 procexit(struct proc *p)
 {
-  /* TODO: free pages and resources */
-
   if (p->state == PROC_ready) {
     removefromlist(&ready, p);
   }
 
+  stackfree(&p->ustack);
+  addrspacefree(p->addrspace);
+  mboxfree(p->mbox);
+
+  /* TODO: free kstack and proc page */
+  
   removefromlist(&procs, p);
 
   if (p == up) {

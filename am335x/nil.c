@@ -27,60 +27,11 @@
 
 #include <head.h>
 #include "fns.h"
-#include "trap.h"
-
-extern char initcode[];
-extern size_t initcodelen;
-
-static int
-mainprocfunc(void *arg)
-{
-  struct label u;
-  reg_t va, pa, o;
-  int r;
-
-  va = 0x1000;
-  pa = (reg_t) &initcode;
-
-  printf("init code at 0x%h len %i\n", pa, initcodelen);
-
-  for (o = 0; o < initcodelen; o += PAGE_SIZE) {
-    r = mappingadd(up->addrspace, va + o, pa + o, PAGE_rw);
-    if (r != OK) {
-      printf("error mapping 0x%h -> 0x%h for init!\n",
-	     va + o, pa + o);
-      return ERR;
-    }
-  }
-
-  memset(&u, 0, sizeof(struct label));
-  u.psr = MODE_USR;
-  u.sp = USTACK_TOP;
-  u.pc = va;
-  
-  droptouser(&u, up->kstack + PAGE_SIZE);
-  
-  return OK;
-}
 
 void
-mainprocinit(void)
+nilfunc(void)
 {
-  reg_t page, kstack, mboxpage, aspage;
-  struct mbox *mbox;
-  struct addrspace *addrspace;
-  struct proc *p;
-  
-  page = getrampage();
-  kstack = getrampage();
-  mboxpage = getrampage();
-  aspage = getrampage();
-
-  mbox = mboxnew(mboxpage);
-  addrspace = addrspacenew(aspage);
-
-  p = procnew(page, kstack, mbox, addrspace);
-
-  forkfunc(p, &mainprocfunc, nil);
-  procready(p);
+  setintr(INTR_on);
+  while (true)
+    ;
 }

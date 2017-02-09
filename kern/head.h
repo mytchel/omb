@@ -115,6 +115,9 @@ schedule(void);
 struct mbox *
 mboxnew(reg_t page);
 
+void
+mboxfree(struct mbox *m);
+
 int
 ksendnb(int pid, struct message *m);
 
@@ -164,6 +167,9 @@ int
 gotolabel(struct label *) __attribute__((noreturn));
 
 void
+nilfunc(void);
+
+void
 droptouser(struct label *u, reg_t ksp)
   __attribute__((noreturn));
 
@@ -176,11 +182,26 @@ forkchild(struct proc *);
 struct addrspace *
 addrspacenew(reg_t page);
 
+struct addrspace *
+addrspacecopy(struct addrspace *o);
+
+void
+addrspacefree(struct addrspace *s);
+
 void
 stackinit(struct stack *s);
 
 int
+stackcopy(struct stack *n, struct stack *o);
+
+void
+stackfree(struct stack *s);
+
+int
 fixfault(reg_t addr);
+
+void *
+kaddr(void *addr, size_t len);
 
 reg_t
 mappingfind(struct proc *p,

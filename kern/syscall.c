@@ -30,36 +30,125 @@
 reg_t
 sysexit(void)
 {
+  intr_t i;
+  
   printf("%i called exit\n", up->pid);
+
+  i = setintr(INTR_off);
+  procexit(up);
+  schedule();
+  setintr(i);
+  
   return ERR;
 }
 
 reg_t
-sysfork(int flags, struct label *regs)
+sysfork(int flags)
 {
+  reg_t page, kstack, mboxpage;
+  struct addrspace *addrspace;
+  struct mbox *mbox;
+  struct proc *p;
+  int r;
+  
   printf("%i called fork\n", up->pid);
-  return ERR;
+
+  page = kgetpage();
+  kstack = kgetpage();
+  mboxpage = kgetpage();
+
+  mbox = mboxnew(mboxpage);
+
+  addrspace = nil;
+  if ((flags & FORK_cmem) == FORK_cmem) {
+    addrspace = addrspacecopy(up->addrspace);
+  } else if ((flags & FORK_smem) == FORK_smem) {
+    addrspace = up->addrspace;
+    do {
+      r = addrspace->refs;
+    } while (!cas(&addrspace->refs, (void *) r, (void *) (r + 1)));
+  }
+
+  if (addrspace == nil) {
+    return ERR;
+  }
+  
+  p = procnew(page, kstack, mbox, addrspace);
+  printf("%i fork to new proc pid is %i\n", up->pid, p->pid);
+
+  r = stackcopy(&p->ustack, &up->ustack);
+  if (r != OK) {
+    procexit(p);
+    return r;
+  }
+  
+  r = forkchild(p);
+
+  printf("%i return %i from fork\n", up->pid, r);
+  return r;
 }
 
 reg_t
 sysgetpid(void)
 {
-  printf("%i called getpid\n", up->pid);
   return up->pid;
 }
 
 reg_t
-syssendnb(int *status)
+syssendnb(int to, struct message *m)
 {
+  struct message *km;
+  
   printf("%i called sendnb\n", up->pid);
-  return ERR;
+
+  km = kaddr(m, sizeof(struct message));
+  if (km == nil) {
+    return ERR;
+  }
+  
+  return ksendnb(to, km);
 }
 
 reg_t
-sysrecvnb(int *status)
+syssend(int to, struct message *m)
 {
+  struct message *km;
+  printf("%i called send\n", up->pid);
+ 
+  km = kaddr(m, sizeof(struct message));
+  if (km == nil) {
+    return ERR;
+  }
+
+  return ksend(to, km);
+}
+
+reg_t
+sysrecvnb(struct message *m)
+{
+  struct message *km;
   printf("%i called recvnb\n", up->pid);
-  return ERR;
+ 
+  km = kaddr(m, sizeof(struct message));
+  if (km == nil) {
+    return ERR;
+  }
+
+  return krecvnb(km);
+}
+
+reg_t
+sysrecv(struct message *m)
+{
+  struct message *km;
+  printf("%i called recv\n", up->pid);
+ 
+  km = kaddr(m, sizeof(struct message));
+  if (km == nil) {
+    return ERR;
+  }
+
+  return krecv(km);
 }
 
 void *systab[NSYSCALLS] = {
@@ -67,5 +156,7 @@ void *systab[NSYSCALLS] = {
   [SYSCALL_FORK]              = (void *) &sysfork,
   [SYSCALL_GETPID]            = (void *) &sysgetpid,
   [SYSCALL_SENDNB]            = (void *) &syssendnb,
+  [SYSCALL_SEND]              = (void *) &syssend,
   [SYSCALL_RECVNB]            = (void *) &sysrecvnb,
+  [SYSCALL_RECV]              = (void *) &sysrecv,
 };

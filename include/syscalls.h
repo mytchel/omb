@@ -33,8 +33,10 @@
 #define SYSCALL_GETPID          3 
 
 #define SYSCALL_SENDNB          4 
-#define SYSCALL_RECVNB          5
+#define SYSCALL_SEND            5 
+#define SYSCALL_RECVNB          6 
+#define SYSCALL_RECV            7
 
-#define NSYSCALLS               6
+#define NSYSCALLS               8
 
 #endif

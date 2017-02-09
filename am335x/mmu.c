@@ -30,6 +30,8 @@
 
 #define L1X(va)		(va >> 20)
 #define L2X(va)		((va >> 12) & ((1 << 8) - 1))
+#define PAL1(entry)     (entry & 0xffffffc00)
+#define PAL2(entry)     (entry & 0xffffff000)
 
 #define L1_TYPE 	0b11
 #define L1_FAULT	0b00
@@ -42,6 +44,9 @@
 #define L2_LARGE	0b01
 #define L2_SMALL	0b10
 #define L2_TINY		0b11
+
+static int
+mappingaddl2(uint32_t *l2, reg_t va, reg_t pa, int flags);
 
 uint32_t
 ttb[4096]__attribute__((__aligned__(16*1024))) = { L1_FAULT };
@@ -208,6 +213,53 @@ stackinit(struct stack *s)
   s->l2 = nil;
 }
 
+int
+stackcopy(struct stack *n, struct stack *o)
+{
+  uint32_t *ntab, *otab;
+  reg_t pn, po;
+
+  stackinit(n);
+
+  if (o->l2 == nil) {
+    return OK;
+  }
+
+  n->l2 = kgetpage();
+  memset((void *) n->l2, 0, PAGE_SIZE);
+
+  ntab = (uint32_t *) n->l2;
+  otab = (uint32_t *) o->l2;
+
+  for (n->bottom = o->top - PAGE_SIZE;
+       n->bottom >= o->bottom;
+       n->bottom -= PAGE_SIZE) {
+
+    pn = kgetpage();
+    if (pn == nil) {
+      stackfree(n);
+      return ERR;
+    }
+
+    if (mappingaddl2(ntab, stack->bottom, pn, PAGE_rw) != OK) {
+      /* TODO: free pn */
+      stackfree(n);
+      return ERR;
+    }
+
+    po = PAL2(otab[L2X(stack->bottom)]);
+    memmove((void *) pn, (void *) po, PAGE_SIZE);
+  }
+
+  return OK;
+}
+
+void
+stackfree(struct stack *s)
+{
+
+}
+
 struct addrspace *
 addrspacenew(reg_t page)
 {
@@ -220,6 +272,18 @@ addrspacenew(reg_t page)
   memset(s->l2, 0, s->l2len * sizeof(struct l2));
 
   return s;
+}
+
+struct addrspace *
+addrspacecopy(struct addrspace *o)
+{
+  return nil;
+}
+
+void
+addrspacefree(struct addrspace *s)
+{
+
 }
 
 static struct l2 *
@@ -361,3 +425,9 @@ fixfault(reg_t addr)
   return ERR;
 }
 
+void *
+kaddr(void *addr, size_t len)
+{
+  /* TODO */
+  return addr;
+}

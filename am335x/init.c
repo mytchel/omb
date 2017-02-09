@@ -31,9 +31,32 @@
 int
 main(void)
 {
-  getpid();
-  
-  while (true)
-    ;
+  struct message m;
+  int self, other, i, *j;
+
+  self = getpid();
+  other = fork(FORK_smem);
+  if (other == 0) {
+    m.type = 4;
+    
+    j = (int *) m.body;
+    for (i = 0; i < 10; i++) {
+      *j = i;
+      if (send(self, &m) != OK) {
+	exit();
+      }
+    }
+
+    exit();
+    
+  } else {
+    while (true) {
+      if (recv(&m) != OK) {
+	exit();
+      }
+    }
+  }
+
+  return OK;
 }
 

@@ -77,6 +77,7 @@ KSRC_C := \
         trap.c                  \
         mem.c                   \
         mmu.c                   \
+        nil.c                   \
         uart.c                  \
         fork.c                  \
         timer.c                 \

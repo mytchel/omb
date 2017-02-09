@@ -44,6 +44,12 @@ mboxnew(reg_t page)
   return m;
 }
 
+void
+mboxfree(struct mbox *m)
+{
+
+}
+
 int
 ksendnb(int to, struct message *m)
 {
