@@ -26,38 +26,41 @@
  */
 
 #include <libc.h>
-#include <message.h>
 #include <syscalls.h>
+#include <message.h>
+#include <mem.h>
 #include <stdarg.h>
 #include <string.h>
 
 
-/* Pages */
+/** STRUCTURES AND CONSTANTS **/
 
-struct pagel {
-  reg_t pa;
-  struct pagel *next;
-};
 
 #define PAGE_ro     0<<0
 #define PAGE_rw     1<<0
- 
-/* Procs */
 
+struct grant {
+  int code;
+  reg_t start;
+  size_t len;
+  int flags;
+};
+
+struct mbox {
+  size_t head, rtail, wtail;
+  size_t len;
+  struct message messages[];
+};
 
 typedef enum {
-  PROC_oncpu,
-  PROC_suspend,
-  PROC_ready,
-  PROC_recv,
   PROC_dead,
+  PROC_suspend,
+  PROC_recv,
+  PROC_ready,
+  PROC_oncpu,
 } procstate_t;
 
-
-/* Can not excede PAGE_SIZE */
-
 struct proc {
-  struct proc *next; /* For global list of procs */
   struct proc *snext; /* For scheduler */
 
   struct label label;
@@ -70,19 +73,13 @@ struct proc {
 
   struct addrspace *addrspace;
   struct mbox *mbox;
+
+  struct grant grants[GRANTSMAX];
 };
 
 
-/* Messages */
+/** FUNCTIONS **/
 
-struct mbox {
-  size_t head, rtail, wtail;
-  size_t len;
-  struct message messages[];
-};
-
-
-/* Procs */
 
 struct proc *
 procnew(reg_t page,
@@ -105,60 +102,9 @@ procrecv(struct proc *p);
 struct proc *
 findproc(int pid);
 
-/* This must all be called with interrupts disabled */
-
+ /* Must all be called with interrupts disabled */
 void
 schedule(void);
-
-/* Messages */
-
-struct mbox *
-mboxnew(reg_t page);
-
-void
-mboxfree(struct mbox *m);
-
-int
-ksendnb(int pid, struct message *m);
-
-int
-ksend(int pid, struct message *m);
-
-int
-krecvnb(struct message *m);
-
-int
-krecv(struct message *m);
-
-
-/* Mem */
-
-void *
-memmove(void *dest, const void *src, size_t len);
-
-void *
-memset(void *dest, int c, size_t len);
-
-
-/* Implimented by each arch */
-
-void
-puts(const char *);
-
-intr_t
-setintr(intr_t i);
-
-reg_t
-kgetpage(void);
-
-uint32_t
-tickstoms(uint32_t);
-
-uint32_t
-mstoticks(uint32_t);
-
-void
-setsystick(uint32_t ticks);
 
 int
 setlabel(struct label *);
@@ -178,6 +124,27 @@ forkfunc(struct proc *, int (*func)(void *), void *);
 
 reg_t
 forkchild(struct proc *);
+
+struct mbox *
+mboxnew(reg_t page);
+
+void
+mboxfree(struct mbox *m);
+
+int
+ksendnb(int pid, struct message *m);
+
+int
+ksend(int pid, struct message *m);
+
+int
+krecvnb(struct message *m);
+
+int
+krecv(struct message *m);
+
+reg_t
+kgetpage(void);
 
 struct addrspace *
 addrspacenew(reg_t page);
@@ -220,6 +187,27 @@ mappingremove(struct addrspace *s,
 
 void
 mmuswitch(struct proc *p);
+
+void *
+memmove(void *dest, const void *src, size_t len);
+
+void *
+memset(void *dest, int c, size_t len);
+
+void
+puts(const char *);
+
+intr_t
+setintr(intr_t i);
+
+uint32_t
+tickstoms(uint32_t);
+
+uint32_t
+mstoticks(uint32_t);
+
+void
+setsystick(uint32_t ticks);
 
 
 /****** Global Variables ******/

@@ -30,9 +30,12 @@
 static void addtolistback(struct proc **, struct proc *);
 static bool removefromlist(struct proc **, struct proc *);
 
-static uint32_t nextpid = 0;
+static uint32_t nextpos = 0;
+static uint32_t nextcode = 0;
 
-static struct proc *procs = nil;
+#define PROCSMAX 1024
+
+static struct proc *procs[PROCSMAX] = {nil};
 static struct proc *ready = nil;
 
 struct proc *up = nil;
@@ -129,10 +132,9 @@ procnew(reg_t page,
 	struct addrspace *addrspace)
 {
   struct proc *p;
+  int pos, code, ncode;
 	
   p = (struct proc *) page;
-
-  p->pid = nextpid++;
 
   p->kstack = kstack;
   p->mbox = mbox;
@@ -140,11 +142,30 @@ procnew(reg_t page,
 
   stackinit(&p->ustack);
 
+  memset(p->grants, 0, sizeof(p->grants));
+  
   p->state = PROC_suspend;
 
+  /* This is horrible */
+  
   do {
-    p->next = procs;
-  } while (!cas(&procs, p->next, p));
+    code = nextcode;
+    ncode = ((code + 13) * 3) & 0xffff;
+  } while (!cas(&nextcode, (void *) code, (void *) ncode));
+
+  while (true) {
+    pos = nextpos % PROCSMAX;
+    p->pid = (pos << 16) | code;
+ 
+    if (!cas(&procs[pos], nil, p)) {
+      continue;
+    } else {
+      do {
+	pos = nextpos;
+      } while (!cas(&nextpos, (void *) pos, (void *) (pos + 1)));
+      break;
+    }
+  }
 
   return p;
 }
@@ -161,8 +182,9 @@ procexit(struct proc *p)
   mboxfree(p->mbox);
 
   /* TODO: free kstack and proc page */
-  
-  removefromlist(&procs, p);
+
+  while (!cas(&procs[p->pid >> 16], p, nil))
+    ;
 
   if (p == up) {
     /* TODO: disable intr */
@@ -217,11 +239,12 @@ findproc(int pid)
 {
   struct proc *p;
 
-  for (p = procs; p != nil; p = p->next) {
-    if (p->pid == pid) {
-      return p;
-    }
+  p = procs[pid >> 16];
+  if (p == nil) {
+    return nil;
+  } else if (p->pid == pid) {
+    return p;
+  } else {
+    return nil;
   }
-
-  return nil;
 }

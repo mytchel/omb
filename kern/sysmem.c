@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2017 Mytchel Hammond <mytchel@openmailbox.org>
+ * Copyright (c) 2016 Mytchel Hammond <mytchel@openmailbox.org>
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -25,22 +25,36 @@
  *
  */
 
-#ifndef _SYSCALLS_H_
-#define _SYSCALLS_H_
+#include <head.h>
 
-#define SYSCALL_EXIT            1
-#define SYSCALL_FORK            2
-#define SYSCALL_GETPID          3 
+reg_t
+sysmgrant(void *start, size_t len, int flags)
+{
+  printf("%i grant from 0x%h, %i with flags %i\n", up->pid,
+	 start, len, flags);
+  
+  return ERR;
+}
 
-#define SYSCALL_SENDNB          4 
-#define SYSCALL_SEND            5 
-#define SYSCALL_RECVNB          6 
-#define SYSCALL_RECV            7
+reg_t
+sysmmap(int from, int code, void *start, va_list ap)
+{
+  size_t len;
+  int flags;
 
-#define SYSCALL_MGRANT          8
-#define SYSCALL_MMAP            9
-#define SYSCALL_MUNMAP         10
+  len = va_arg(ap, size_t);
+  flags = va_arg(ap, int);
 
-#define NSYSCALLS              11
+  printf("%i trying to mmap from %i, with code %i, to 0x%h, %i, with flags %i\n",
+	 up->pid, from, code, start, len, flags);
 
-#endif
+  return ERR;
+}
+
+reg_t
+sysmunmap(void *start, size_t len)
+{
+  printf("%i unmap from 0x%h, %i\n", up->pid, start, len);
+  return ERR;
+}
+

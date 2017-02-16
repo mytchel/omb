@@ -95,61 +95,25 @@ sysgetpid(void)
 }
 
 reg_t
-syssendnb(int to, struct message *m)
-{
-  struct message *km;
-  
-  printf("%i called sendnb\n", up->pid);
-
-  km = kaddr(m, sizeof(struct message));
-  if (km == nil) {
-    return ERR;
-  }
-  
-  return ksendnb(to, km);
-}
+syssendnb(int to, struct message *m);
 
 reg_t
-syssend(int to, struct message *m)
-{
-  struct message *km;
-  printf("%i called send\n", up->pid);
- 
-  km = kaddr(m, sizeof(struct message));
-  if (km == nil) {
-    return ERR;
-  }
-
-  return ksend(to, km);
-}
+syssend(int to, struct message *m);
 
 reg_t
-sysrecvnb(struct message *m)
-{
-  struct message *km;
-  printf("%i called recvnb\n", up->pid);
- 
-  km = kaddr(m, sizeof(struct message));
-  if (km == nil) {
-    return ERR;
-  }
-
-  return krecvnb(km);
-}
+sysrecvnb(struct message *m);
 
 reg_t
-sysrecv(struct message *m)
-{
-  struct message *km;
-  printf("%i called recv\n", up->pid);
- 
-  km = kaddr(m, sizeof(struct message));
-  if (km == nil) {
-    return ERR;
-  }
+sysrecv(struct message *m);
 
-  return krecv(km);
-}
+reg_t
+sysmgrant(void *start, size_t len, int flags);
+
+reg_t
+sysmmap(int from, int code, void *start, va_list ap);
+
+reg_t
+sysmunmap(void *start, size_t len);
 
 void *systab[NSYSCALLS] = {
   [SYSCALL_EXIT]              = (void *) &sysexit,
@@ -159,4 +123,7 @@ void *systab[NSYSCALLS] = {
   [SYSCALL_SEND]              = (void *) &syssend,
   [SYSCALL_RECVNB]            = (void *) &sysrecvnb,
   [SYSCALL_RECV]              = (void *) &sysrecv,
+  [SYSCALL_MGRANT]            = (void *) &sysmgrant,
+  [SYSCALL_MMAP]              = (void *) &sysmmap,
+  [SYSCALL_MUNMAP]            = (void *) &sysmunmap,
 };

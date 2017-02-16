@@ -1,4 +1,4 @@
-/*
+#/*
  *
  * Copyright (c) 2017 Mytchel Hammond <mytchel@openmailbox.org>
  * 
@@ -25,22 +25,18 @@
  *
  */
 
-#ifndef _SYSCALLS_H_
-#define _SYSCALLS_H_
+#ifndef _MEM_H_
+#define _MEM_H_
 
-#define SYSCALL_EXIT            1
-#define SYSCALL_FORK            2
-#define SYSCALL_GETPID          3 
+#define GRANTSMAX 10
 
-#define SYSCALL_SENDNB          4 
-#define SYSCALL_SEND            5 
-#define SYSCALL_RECVNB          6 
-#define SYSCALL_RECV            7
+int
+mgrant(void *start, size_t len, int flags);
 
-#define SYSCALL_MGRANT          8
-#define SYSCALL_MMAP            9
-#define SYSCALL_MUNMAP         10
+int
+mmap(int from, int code, void *start, size_t len, int flags);
 
-#define NSYSCALLS              11
+int
+munmap(void *start, size_t len);
 
 #endif

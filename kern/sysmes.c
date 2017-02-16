@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2017 Mytchel Hammond <mytchel@openmailbox.org>
+ * Copyright (c) 2016 Mytchel Hammond <mytchel@openmailbox.org>
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -25,22 +25,61 @@
  *
  */
 
-#ifndef _SYSCALLS_H_
-#define _SYSCALLS_H_
+#include <head.h>
 
-#define SYSCALL_EXIT            1
-#define SYSCALL_FORK            2
-#define SYSCALL_GETPID          3 
+reg_t
+syssendnb(int to, struct message *m)
+{
+  struct message *km;
+  
+  printf("%i called sendnb\n", up->pid);
 
-#define SYSCALL_SENDNB          4 
-#define SYSCALL_SEND            5 
-#define SYSCALL_RECVNB          6 
-#define SYSCALL_RECV            7
+  km = kaddr(m, sizeof(struct message));
+  if (km == nil) {
+    return ERR;
+  }
+  
+  return ksendnb(to, km);
+}
 
-#define SYSCALL_MGRANT          8
-#define SYSCALL_MMAP            9
-#define SYSCALL_MUNMAP         10
+reg_t
+syssend(int to, struct message *m)
+{
+  struct message *km;
+  printf("%i called send\n", up->pid);
+ 
+  km = kaddr(m, sizeof(struct message));
+  if (km == nil) {
+    return ERR;
+  }
 
-#define NSYSCALLS              11
+  return ksend(to, km);
+}
 
-#endif
+reg_t
+sysrecvnb(struct message *m)
+{
+  struct message *km;
+  printf("%i called recvnb\n", up->pid);
+ 
+  km = kaddr(m, sizeof(struct message));
+  if (km == nil) {
+    return ERR;
+  }
+
+  return krecvnb(km);
+}
+
+reg_t
+sysrecv(struct message *m)
+{
+  struct message *km;
+  printf("%i called recv\n", up->pid);
+ 
+  km = kaddr(m, sizeof(struct message));
+  if (km == nil) {
+    return ERR;
+  }
+
+  return krecv(km);
+}

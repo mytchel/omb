@@ -49,11 +49,7 @@ forkchild(struct proc *p)
 {
   uint32_t s, d;
 
-  printf("parent addr of up is 0x%h, contains 0x%h\n", &up, up);
-  
   if (setlabel(&p->label)) {
-    printf("child addr of up is 0x%h, contains 0x%h\n", &up, up);
-    printf("%i return zero for fork\n", up->pid);
     return 0;
   }
 
@@ -65,8 +61,6 @@ forkchild(struct proc *p)
   memmove((void *) p->label.sp, (void *) s, d);
 
   procready(p);
-
-  printf("%i return %i for fork\n", up->pid, p->pid);
 
   return p->pid;
 }

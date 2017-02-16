@@ -86,6 +86,8 @@ KSRC_C := \
         ../kern/mem.c           \
         ../kern/message.c       \
         ../kern/syscall.c       \
+        ../kern/sysmes.c        \
+        ../kern/sysmem.c        \
         ../kern/string.c        \
         ../kern/printf.c        \
         ../kern/proc.c          \

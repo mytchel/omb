@@ -65,7 +65,10 @@ ksendnb(int to, struct message *m)
   }
 
   mbox = p->mbox;
-
+  if (mbox == nil) {
+    return ERR;
+  }
+  
   otail = mbox->wtail;
   ntail = (otail + 1) % mbox->len;
 
@@ -109,7 +112,10 @@ krecvnb(struct message *m)
   size_t h, n;
 
   mbox = up->mbox;
-
+  if (mbox == nil) {
+    return ERR;
+  }
+  
   h = mbox->head;
   if (h == mbox->rtail) {
     return ERR;
