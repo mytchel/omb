@@ -45,7 +45,8 @@ mainprocfunc(void *arg)
   printf("init code at 0x%h len %i\n", pa, initcodelen);
 
   for (o = 0; o < initcodelen; o += PAGE_SIZE) {
-    r = mappingadd(up->addrspace, va + o, pa + o, PAGE_rw);
+    printf("map from 0x%h to 0x%h\n", pa + o, va + o);
+    r = mappingadd(up->addrspace, va + o, pa + o, MEM_rw);
     if (r != OK) {
       printf("error mapping 0x%h -> 0x%h for init!\n",
 	     va + o, pa + o);
@@ -67,8 +68,8 @@ void
 mainprocinit(void)
 {
   reg_t page, kstack, mboxpage, aspage;
-  struct mbox *mbox;
   struct addrspace *addrspace;
+  struct mbox *mbox;
   struct proc *p;
   
   page = getrampage();
@@ -76,8 +77,8 @@ mainprocinit(void)
   mboxpage = getrampage();
   aspage = getrampage();
 
-  mbox = mboxnew(mboxpage);
-  addrspace = addrspacenew(aspage);
+  mbox = mboxnew(mboxpage, PAGE_SIZE);
+  addrspace = addrspacenew(aspage, PAGE_SIZE);
 
   p = procnew(page, kstack, mbox, addrspace);
 

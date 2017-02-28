@@ -28,10 +28,9 @@
 #ifndef _MESSAGE_H_
 #define _MESSAGE_H_
 
-#define MESSAGEBODY (64-sizeof(int)-sizeof(int))
+#define MESSAGEBODY (64-sizeof(int))
 
 struct message {
-  int from;
   int type;
   uint8_t body[MESSAGEBODY];
 };
@@ -49,13 +48,44 @@ int
 recv(struct message *m);
 
 
-
 #define MEMREQ_kern     1
-#define MEMREQ_max      2
+#define MEMREQ_user     2
+#define MEMREQ_max      3
 
+struct memreq_kern {
+  int from;
+};
 
+STATIC_ASSERT(sizeof(struct memreq_kern) <= MESSAGEBODY,
+	      memreq_kern_too_big);
+
+  
 struct memresp_kern {
   reg_t start;
 };
+
+STATIC_ASSERT(sizeof(struct memresp_kern) <= MESSAGEBODY,
+	      memresp_kern_too_big);
+
+struct memreq_user {
+  #define MEMREQ_user_ram   1
+  #define MEMREQ_user_io    2
+  int from;
+  int type;
+  reg_t pa;
+  size_t len;
+  int flags;
+};
+
+STATIC_ASSERT(sizeof(struct memreq_user) <= MESSAGEBODY,
+	      memreq_user_too_big);
+
+struct memresp_user {
+  int ret; /* OK or error */
+  int code;
+};
+
+STATIC_ASSERT(sizeof(struct memresp_user) <= MESSAGEBODY,
+	      memresp_user_too_big);
 
 #endif

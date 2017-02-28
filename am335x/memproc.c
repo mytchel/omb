@@ -29,42 +29,13 @@
 #include "fns.h"
 
 static int
-handlekern(struct message *in, struct message *out)
-{
-  struct memresp_kern *resp;
-
-  printf("%i wants a page for kernel use\n", in->from);
-
-  out->type = MEMREQ_kern;
-  
-  resp = (struct memresp_kern *) out->body;
-  resp->start = getrampage();
-
-  return OK;
-}
-
-static int (*handle[MEMREQ_max])(struct message *in,
-		     struct message *out) = {
-  [MEMREQ_kern] = handlekern,
-};
-
-static int
 memprocfunc(void *arg)
 {
-  struct message in, out;
+  struct message in;
   
   while (true) {
     if (krecv(&in) == OK) {
-      printf("mem got message from %i, type %i\n", in.from, in.type);
- 
-      if (in.type > MEMREQ_max || in.type < 0) {
-	continue;
-      }
-
-      if (handle[in.type](&in, &out) == OK) {
-	printf("mem sending response to %i\n", in.from);
-	ksend(in.from, &out);
-      }
+      printf("memproc got message of type %i\n", in.type);
     }
   }
 
@@ -77,12 +48,12 @@ memprocinit(void)
   reg_t page, kstack, mboxpage;
   struct mbox *mbox;
   struct proc *p;
-  
+
   page = getrampage();
   kstack = getrampage();
   mboxpage = getrampage();
 
-  mbox = mboxnew(mboxpage);
+  mbox = mboxnew(mboxpage, PAGE_SIZE);
 
   p = procnew(page, kstack, mbox, nil);
 

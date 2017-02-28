@@ -181,11 +181,14 @@ reg_t
 kgetpage(void)
 {
   struct memresp_kern *resp;
+  struct memreq_kern *req;
   struct message m;
 
   m.type = MEMREQ_kern;
+  req = (struct memreq_kern *) m.body;
+  req->from = up->pid;
   
-  if (ksend(0, &m) != OK) {
+  if (ksend(1, &m) != OK) {
     return nil;
   }
 

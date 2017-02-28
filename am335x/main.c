@@ -29,7 +29,7 @@
 #include "fns.h"
 
 int
-main(void)
+kmain(void)
 {
   puts("OMB Booting...\n");
 
@@ -41,6 +41,8 @@ main(void)
   memprocinit();
   mainprocinit();
 
+  puts("schedule!\n");
+  
   schedule();
   
   /* Never reached */

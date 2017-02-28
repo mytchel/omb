@@ -52,4 +52,9 @@ cas(void *addr, void *old, void *new);
 		     x + sizeof(void *) - (x % sizeof(void *)) : \
 		     x)
 
+#define STATIC_ASSERT(COND, MSG) typedef char static_assertion_##MSG[(COND)?1:-1]
+
+#define MEM_ro 0
+#define MEM_rw 1
+
 #endif

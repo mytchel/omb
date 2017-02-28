@@ -31,5 +31,8 @@
 #define OK		 0
 /* General error */
 #define ERR		-1
+#define ENOMEM		-2
+#define EFULL		-3
+#define EEMPTY		-4
 
 #endif

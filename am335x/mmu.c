@@ -241,7 +241,7 @@ stackcopy(struct stack *n, struct stack *o)
       return ERR;
     }
 
-    if (mappingaddl2(ntab, stack->bottom, pn, PAGE_rw) != OK) {
+    if (mappingaddl2(ntab, stack->bottom, pn, MEM_rw) != OK) {
       /* TODO: free pn */
       stackfree(n);
       return ERR;
@@ -257,17 +257,21 @@ stackcopy(struct stack *n, struct stack *o)
 void
 stackfree(struct stack *s)
 {
-
+  /* TODO: free stuff */
+  
+  s->top = USTACK_TOP;
+  s->bottom = USTACK_TOP;
+  s->l2 = nil;
 }
 
 struct addrspace *
-addrspacenew(reg_t page)
+addrspacenew(reg_t start, size_t len)
 {
   struct addrspace *s;
 
-  s = (struct addrspace *) page;
+  s = (struct addrspace *) start;
   s->refs = 1;
-  s->l2len = (PAGE_SIZE - sizeof(struct addrspace) / sizeof(struct l2));
+  s->l2len = (len - sizeof(struct addrspace) / sizeof(struct l2));
 
   memset(s->l2, 0, s->l2len * sizeof(struct l2));
 
@@ -283,7 +287,17 @@ addrspacecopy(struct addrspace *o)
 void
 addrspacefree(struct addrspace *s)
 {
+  int r;
+  
+  do {
+    r = s->refs;
+  } while (!cas(&s->refs, (void *) r, (void *) (r - 1)));
 
+  if (r > 1) {
+    return;
+  }
+
+  /* TODO: free stuff */
 }
 
 static struct l2 *
@@ -306,13 +320,17 @@ getl2new(struct addrspace *s, struct l2 *l2, reg_t l1)
 }
 
 static struct l2 *
-getl2(struct addrspace *s, reg_t l1)
+getl2(struct addrspace *s, reg_t l1, bool add)
 {
   size_t i;
 
   for (i = 0; i < s->l2len; i++) {
     if (s->l2[i].pa == 0) {
-      return getl2new(s, &s->l2[i], l1);
+      if (add) {
+	return getl2new(s, &s->l2[i], l1);
+      } else {
+	return nil;
+      }
     } else if (s->l2[i].va == l1) {
       return &s->l2[i];
     }
@@ -326,7 +344,7 @@ mappingaddl2(uint32_t *l2, reg_t va, reg_t pa, int flags)
 {
   uint32_t tex, ap, c, b;
 
-  if (flags & PAGE_rw) {
+  if (flags & MEM_rw) {
     ap = AP_RW_RW;
   } else {
     ap = AP_RW_RO;
@@ -358,7 +376,8 @@ mappingadd(struct addrspace *s,
   struct l2 *l2;
   uint32_t *tab;
 
-  l2 = getl2(s, L1X(va));
+  printf("mapping add\n");
+  l2 = getl2(s, L1X(va), true);
   if (l2 == nil) {
     return ERR;
   }
@@ -372,7 +391,23 @@ int
 mappingremove(struct addrspace *s,
 	      reg_t va)
 {
-  return ERR;
+  struct l2 *l2;
+  uint32_t *tab;
+
+  l2 = getl2(s, L1X(va), false);
+  if (l2 == nil) {
+    return ERR;
+  }
+  
+  tab = (uint32_t *) l2->pa;
+
+  if (tab[L2X(va)] == L2_FAULT) {
+    return ERR;
+  } else {
+    tab[L2X(va)] = L2_FAULT;
+  }
+
+  return OK;
 }
 
 reg_t
@@ -380,14 +415,47 @@ mappingfind(struct proc *p,
 	    reg_t va,
 	    int *flags)
 {
-  return ERR;
+  struct l2 *l2;
+  uint32_t *tab;
+  reg_t entry;
+  reg_t ap;
+  int f;
+
+  if (p->ustack.top >= va && p->ustack.bottom <= va) {
+    tab = (uint32_t *) p->ustack.l2;
+  } else {
+    l2 = getl2(p->addrspace, L1X(va), false);
+    if (l2 == nil) {
+      return nil;
+    } else {
+      tab = (uint32_t *) l2->pa;
+    }
+  }
+
+  if (tab == nil) {
+    return nil;
+  }
+ 
+  entry = tab[L2X(va)];
+
+  ap = entry & (3 << 4);
+
+  f = 0;
+  if (ap == AP_RW_RO) {
+    f |= MEM_ro;
+  } else {
+    f |= MEM_rw;
+  }
+  
+  *flags = f;
+  return entry & PAGE_MASK;
 }
 
 int
 fixstack(struct stack *stack, reg_t addr)
 {
-  uint32_t *tab;
   reg_t new, bottom;
+  uint32_t *tab;
   
   bottom = stack->bottom - PAGE_SIZE;
 
@@ -409,7 +477,7 @@ fixstack(struct stack *stack, reg_t addr)
 
   stack->bottom = bottom;
   
-  return mappingaddl2(tab, stack->bottom, new, PAGE_rw);
+  return mappingaddl2(tab, stack->bottom, new, MEM_rw);
 }
 
 int
@@ -425,9 +493,29 @@ fixfault(reg_t addr)
   return ERR;
 }
 
-void *
-kaddr(void *addr, size_t len)
+int
+checkflags(int need, int got)
 {
-  /* TODO */
-  return addr;
+  return OK;
+}
+
+int
+validaddr(void *addr, size_t len, int flags)
+{
+  reg_t off, va, l;
+  int f;
+
+  va = ((reg_t) addr) & PAGE_MASK;
+
+  off = ((reg_t) addr) - va;
+  
+  for (l = 0; l < len + off; l += PAGE_SIZE) {
+    if (mappingfind(up, va + l, &f) == nil) {
+      return ERR;
+    } else if (checkflags(flags, f) != OK) {
+      return ERR;
+    }
+  }
+  
+  return OK;
 }

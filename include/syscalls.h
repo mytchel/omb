@@ -37,10 +37,6 @@
 #define SYSCALL_RECVNB          6 
 #define SYSCALL_RECV            7
 
-#define SYSCALL_MGRANT          8
-#define SYSCALL_MMAP            9
-#define SYSCALL_MUNMAP         10
-
-#define NSYSCALLS              11
+#define NSYSCALLS               8
 
 #endif

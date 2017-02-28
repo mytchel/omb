@@ -31,8 +31,8 @@
 int
 main(void)
 {
-  struct message m;
   int self, other, i, *j;
+  struct message m;
 
   self = getpid();
   other = fork(FORK_smem);
@@ -40,7 +40,7 @@ main(void)
     m.type = 4;
     
     j = (int *) m.body;
-    for (i = 0; i < 10; i++) {
+    for (i = 0; i < 5; i++) {
       *j = i;
       if (send(self, &m) != OK) {
 	exit();
@@ -50,11 +50,11 @@ main(void)
     exit();
     
   } else {
-    while (true) {
-      if (recv(&m) != OK) {
-	exit();
-      }
+    while (recv(&m) == OK) {
+
     }
+
+    exit();
   }
 
   return OK;

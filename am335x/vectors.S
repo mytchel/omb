@@ -27,9 +27,9 @@
 
 .section .text
 
-.global _start
+.global _kstart
 
-_start:
+_kstart:
 	ldr r0, = kernel_bss_start
 	ldr r1, = kernel_bss_end
 	mov r2, #0
@@ -57,7 +57,7 @@ _start:
 	
 	bl vectortableinit
 
-	b main
+	b kmain
 
 
 vectortableinit:
@@ -75,7 +75,7 @@ vectortableinit:
 
 .balign 32
 vectortable:
-	ldr pc, =_start
+	ldr pc, =_kstart
 	ldr pc, =undefined_instruction
 	ldr pc, =swi_ex
 	ldr pc, =prefetch_abort

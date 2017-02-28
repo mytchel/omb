@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2016 Mytchel Hammond <mytchel@openmailbox.org>
+ * Copyright (c) 2017 Mytchel Hammond <mytchel@openmailbox.org>
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -30,56 +30,47 @@
 reg_t
 syssendnb(int to, struct message *m)
 {
-  struct message *km;
-  
   printf("%i called sendnb\n", up->pid);
 
-  km = kaddr(m, sizeof(struct message));
-  if (km == nil) {
+  if (validaddr(m, sizeof(struct message), MEM_ro) != OK) {
     return ERR;
   }
   
-  return ksendnb(to, km);
+  return ksendnb(to, m);
 }
 
 reg_t
 syssend(int to, struct message *m)
 {
-  struct message *km;
-  printf("%i called send\n", up->pid);
+  printf("%i called send to %i, type %i\n", up->pid, to, m->type);
  
-  km = kaddr(m, sizeof(struct message));
-  if (km == nil) {
+  if (validaddr(m, sizeof(struct message), MEM_ro) != OK) {
     return ERR;
   }
 
-  return ksend(to, km);
+  return ksend(to, m);
 }
 
 reg_t
 sysrecvnb(struct message *m)
 {
-  struct message *km;
   printf("%i called recvnb\n", up->pid);
  
-  km = kaddr(m, sizeof(struct message));
-  if (km == nil) {
+  if (validaddr(m, sizeof(struct message), MEM_rw) != OK) {
     return ERR;
   }
 
-  return krecvnb(km);
+  return krecvnb(m);
 }
 
 reg_t
 sysrecv(struct message *m)
 {
-  struct message *km;
   printf("%i called recv\n", up->pid);
  
-  km = kaddr(m, sizeof(struct message));
-  if (km == nil) {
+  if (validaddr(m, sizeof(struct message), MEM_rw) != OK) {
     return ERR;
   }
 
-  return krecv(km);
+  return krecv(m);
 }

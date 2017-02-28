@@ -31,7 +31,7 @@ static void addtolistback(struct proc **, struct proc *);
 static bool removefromlist(struct proc **, struct proc *);
 
 static uint32_t nextpos = 0;
-static uint32_t nextcode = 0;
+static uint32_t nextcode = 1;
 
 #define PROCSMAX 1024
 
@@ -131,8 +131,8 @@ procnew(reg_t page,
 	struct mbox *mbox,
 	struct addrspace *addrspace)
 {
-  struct proc *p;
   int pos, code, ncode;
+  struct proc *p;
 	
   p = (struct proc *) page;
 
@@ -142,30 +142,26 @@ procnew(reg_t page,
 
   stackinit(&p->ustack);
 
-  memset(p->grants, 0, sizeof(p->grants));
-  
   p->state = PROC_suspend;
 
-  /* This is horrible */
-  
+  p->wnext = nil;
+  p->snext = nil;
+
+  /* Get a random code, this will suffice for now. */
   do {
     code = nextcode;
     ncode = ((code + 13) * 3) & 0xffff;
   } while (!cas(&nextcode, (void *) code, (void *) ncode));
 
-  while (true) {
-    pos = nextpos % PROCSMAX;
+  /* Put proc in the procs table, and set pid. */
+  do {
+    do {
+      pos = nextpos % PROCSMAX;
+    } while (!cas(&nextpos, (void *) pos, (void *) (pos + 1)));
+
     p->pid = (pos << 16) | code;
  
-    if (!cas(&procs[pos], nil, p)) {
-      continue;
-    } else {
-      do {
-	pos = nextpos;
-      } while (!cas(&nextpos, (void *) pos, (void *) (pos + 1)));
-      break;
-    }
-  }
+  } while (!cas(&procs[pos], nil, p));
 
   return p;
 }
@@ -173,54 +169,85 @@ procnew(reg_t page,
 void
 procexit(struct proc *p)
 {
+  struct addrspace *space;
+  struct mbox *mbox;
+  intr_t i;
+
+  printf("procexit %i\n", p->pid);
+  
   if (p->state == PROC_ready) {
     removefromlist(&ready, p);
   }
 
   stackfree(&p->ustack);
-  addrspacefree(p->addrspace);
-  mboxfree(p->mbox);
+
+  do {
+    space = p->addrspace;
+  } while (!cas(&p->addrspace, space, nil));
+
+  if (space != nil) {
+    addrspacefree(space);
+  }
+
+  do {
+    mbox = p->mbox;
+  } while (!cas(&p->mbox, mbox, nil));
+  
+  if (mbox != nil) {
+    mboxfree(mbox);
+  }
 
   /* TODO: free kstack and proc page */
 
   while (!cas(&procs[p->pid >> 16], p, nil))
     ;
 
+  i = setintr(INTR_off);
   if (p == up) {
-    /* TODO: disable intr */
     up = nil;
     schedule();
   }
+  setintr(i);
 }
 
 void
 procsuspend(struct proc *p)
 {
+  intr_t i;
+
+  p->state = PROC_suspend;
+
   if (p->state == PROC_ready) {
     removefromlist(&ready, p);
   }
-  
-  p->state = PROC_suspend;
 
+  i = setintr(INTR_off);
   if (p == up) {
-    /* TODO: disable intr */
     schedule();
   }
+  setintr(i);
 }
 
 void
-procrecv(struct proc *p)
+procrecv(void)
 {
-  if (p->state == PROC_ready) {
-    removefromlist(&ready, p);
-  }
-  
-  p->state = PROC_recv;
+  intr_t i;
 
-  if (p == up) {
-    /* TODO: disable intr */
-    schedule();
-  }
+  i = setintr(INTR_off);
+  up->state = PROC_recv;
+  schedule();
+  setintr(i);
+}
+
+void
+procsend(void)
+{
+  intr_t i;
+
+  i = setintr(INTR_off);
+  up->state = PROC_send;
+  schedule();
+  setintr(i);
 }
 
 void
@@ -238,13 +265,34 @@ struct proc *
 findproc(int pid)
 {
   struct proc *p;
+  int pos;
 
-  p = procs[pid >> 16];
+  pos = pid >> 16;
+  if (pos > PROCSMAX) {
+    return nil;
+  }
+  
+  p = procs[pos];
   if (p == nil) {
     return nil;
   } else if (p->pid == pid) {
     return p;
   } else {
     return nil;
+  }
+}
+
+int
+procwlistadd(struct proc **pp, struct proc *p)
+{
+  while (*pp != nil)
+    pp = &((*pp)->wnext);
+
+  p->wnext = nil;
+
+  if (cas(pp, nil, p)) {
+    return OK;
+  } else {
+    return ERR;
   }
 }

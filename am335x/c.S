@@ -43,7 +43,7 @@
 
 _start:
 	bl main
-	@ fall through to exit
+	b exit
 
 exit:
 	push {r12, lr}
@@ -63,7 +63,6 @@ getpid:
 	push {r12, lr}
 	mov r12, #SYSCALL_GETPID
 	svc 0
-	mov pc, lr
 	pop {r12, pc}
 
 
@@ -94,7 +93,7 @@ recv:
 	svc 0
 	pop {r12, pc}
 
-		
+	
 @bool
 @cas(void *addr, void *old, void *new);
 cas:

@@ -28,26 +28,12 @@
 #include <libc.h>
 #include <syscalls.h>
 #include <message.h>
-#include <mem.h>
 #include <stdarg.h>
 #include <string.h>
 
-
-/** STRUCTURES AND CONSTANTS **/
-
-
-#define PAGE_ro     0<<0
-#define PAGE_rw     1<<0
-
-struct grant {
-  int code;
-  reg_t start;
-  size_t len;
-  int flags;
-};
-
 struct mbox {
   size_t head, rtail, wtail;
+  struct proc *swaiting, *rwaiting;
   size_t len;
   struct message messages[];
 };
@@ -56,12 +42,14 @@ typedef enum {
   PROC_dead,
   PROC_suspend,
   PROC_recv,
+  PROC_send,
   PROC_ready,
   PROC_oncpu,
 } procstate_t;
 
 struct proc {
   struct proc *snext; /* For scheduler */
+  struct proc *wnext; /* For wait list */
 
   struct label label;
 
@@ -71,15 +59,10 @@ struct proc {
   reg_t kstack;
   struct stack ustack;
 
-  struct addrspace *addrspace;
   struct mbox *mbox;
 
-  struct grant grants[GRANTSMAX];
+  struct addrspace *addrspace;
 };
-
-
-/** FUNCTIONS **/
-
 
 struct proc *
 procnew(reg_t page,
@@ -97,10 +80,16 @@ void
 procsuspend(struct proc *p);
 
 void
-procrecv(struct proc *p);
+procrecv(void);
+
+void
+procsend(void);
 
 struct proc *
 findproc(int pid);
+
+int
+procwlistadd(struct proc **pp, struct proc *p);
 
  /* Must all be called with interrupts disabled */
 void
@@ -126,7 +115,7 @@ reg_t
 forkchild(struct proc *);
 
 struct mbox *
-mboxnew(reg_t page);
+mboxnew(reg_t start, size_t len);
 
 void
 mboxfree(struct mbox *m);
@@ -146,15 +135,6 @@ krecv(struct message *m);
 reg_t
 kgetpage(void);
 
-struct addrspace *
-addrspacenew(reg_t page);
-
-struct addrspace *
-addrspacecopy(struct addrspace *o);
-
-void
-addrspacefree(struct addrspace *s);
-
 void
 stackinit(struct stack *s);
 
@@ -164,16 +144,20 @@ stackcopy(struct stack *n, struct stack *o);
 void
 stackfree(struct stack *s);
 
+struct addrspace *
+addrspacenew(reg_t start, size_t len);
+
+struct addrspace *
+addrspacecopy(struct addrspace *o);
+
+void
+addrspacefree(struct addrspace *s);
+
 int
 fixfault(reg_t addr);
 
-void *
-kaddr(void *addr, size_t len);
-
-reg_t
-mappingfind(struct proc *p,
-	    reg_t va,
-	    int *flags);
+int
+validaddr(void *addr, size_t len, int flags);
 
 int
 mappingadd(struct addrspace *s,
@@ -184,6 +168,14 @@ mappingadd(struct addrspace *s,
 int
 mappingremove(struct addrspace *s,
 	      reg_t va);
+
+reg_t
+mappingfind(struct proc *p,
+	    reg_t va,
+	    int *flags);
+
+int
+checkflags(int need, int got);
 
 void
 mmuswitch(struct proc *p);
@@ -209,8 +201,4 @@ mstoticks(uint32_t);
 void
 setsystick(uint32_t ticks);
 
-
-/****** Global Variables ******/
-
 extern struct proc *up;
-extern void *systab[NSYSCALLS];

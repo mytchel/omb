@@ -60,24 +60,20 @@ typedef enum {
   PAGE_io,
 } page_t;
 
-
 struct pageholder {
   reg_t pa;
   page_t type;
   struct pageholder *next;
 };
 
-
 struct stack {
   reg_t top, bottom, l2;
 };
-
 
 struct l2 {
   reg_t va;
   reg_t pa;
 };
-
 
 struct addrspace {
   int refs;
