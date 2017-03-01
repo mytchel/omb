@@ -1,4 +1,4 @@
-/*
+#/*
  *
  * Copyright (c) 2017 Mytchel Hammond <mytchel@openmailbox.org>
  * 
@@ -25,52 +25,37 @@
  *
  */
 
-#include <head.h>
+#ifndef _COM_H_
+#define _COM_H_
 
-reg_t
-syssendnb(int to, struct message *m)
-{
-  printf("%i called sendnb\n", up->pid);
+#define MESSAGEBODY (64-sizeof(int)-sizeof(int))
 
-  if (validaddr(m, sizeof(struct message), MEM_ro) != OK) {
-    return ERR;
-  }
-  
-  return ksendnb(to, m);
-}
+struct message {
+  int from;
+  int type;
+  uint8_t body[MESSAGEBODY];
+};
 
-reg_t
-syssend(int to, struct message *m)
-{
-  printf("%i called send to %i, type %i\n", up->pid, to, m->type);
- 
-  if (validaddr(m, sizeof(struct message), MEM_ro) != OK) {
-    return ERR;
-  }
+int
+sendnb(int to, struct message *m);
 
-  return ksend(to, m);
-}
+int
+send(int to, struct message *m);
 
-reg_t
-sysrecvnb(struct message *m)
-{
-  printf("%i called recvnb\n", up->pid);
- 
-  if (validaddr(m, sizeof(struct message), MEM_rw) != OK) {
-    return ERR;
-  }
+int
+recvnb(struct message *m);
 
-  return krecvnb(m);
-}
+int
+recv(struct message *m);
 
-reg_t
-sysrecv(struct message *m)
-{
-  printf("%i called recv\n", up->pid);
- 
-  if (validaddr(m, sizeof(struct message), MEM_rw) != OK) {
-    return ERR;
-  }
+#define MESSAGESIZE(m) \
+  STATIC_ASSERT(sizeof(struct m) <= MESSAGEBODY, \
+		too_big##m)
 
-  return krecv(m);
-}
+struct mtest {
+  char buf[MESSAGEBODY];
+};
+
+MESSAGESIZE(mtest);
+
+#endif

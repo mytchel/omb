@@ -1,4 +1,4 @@
-#/*
+/*
  *
  * Copyright (c) 2017 Mytchel Hammond <mytchel@openmailbox.org>
  * 
@@ -25,67 +25,32 @@
  *
  */
 
-#ifndef _MESSAGE_H_
-#define _MESSAGE_H_
+#ifndef _C_H_
+#define _C_H_
 
-#define MESSAGEBODY (64-sizeof(int))
-
-struct message {
-  int type;
-  uint8_t body[MESSAGEBODY];
-};
+#include <err.h>
+#include <types.h>
 
 int
-sendnb(int to, struct message *m);
+exit(void) __attribute__((noreturn));
 
 int
-send(int to, struct message *m);
+fork(void);
 
 int
-recvnb(struct message *m);
+getpid(void);
 
-int
-recv(struct message *m);
+bool
+cas(void *addr, void *old, void *new);
 
+#define roundptr(x) (x % sizeof(void *) != 0 ?			 \
+		     x + sizeof(void *) - (x % sizeof(void *)) : \
+		     x)
 
-#define MEMREQ_kern     1
-#define MEMREQ_user     2
-#define MEMREQ_max      3
+#define STATIC_ASSERT(COND, MSG) \
+  typedef char static_assertion_##MSG[(COND)?1:-1]
 
-struct memreq_kern {
-  int from;
-};
-
-STATIC_ASSERT(sizeof(struct memreq_kern) <= MESSAGEBODY,
-	      memreq_kern_too_big);
-
-  
-struct memresp_kern {
-  reg_t start;
-};
-
-STATIC_ASSERT(sizeof(struct memresp_kern) <= MESSAGEBODY,
-	      memresp_kern_too_big);
-
-struct memreq_user {
-  #define MEMREQ_user_ram   1
-  #define MEMREQ_user_io    2
-  int from;
-  int type;
-  reg_t pa;
-  size_t len;
-  int flags;
-};
-
-STATIC_ASSERT(sizeof(struct memreq_user) <= MESSAGEBODY,
-	      memreq_user_too_big);
-
-struct memresp_user {
-  int ret; /* OK or error */
-  int code;
-};
-
-STATIC_ASSERT(sizeof(struct memresp_user) <= MESSAGEBODY,
-	      memresp_user_too_big);
+#define MEM_ro 0
+#define MEM_rw 1
 
 #endif

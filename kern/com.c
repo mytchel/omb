@@ -27,13 +27,9 @@
 
 #include <head.h>
 
-struct mbox *
-mboxnew(reg_t start, size_t len)
+void
+mboxinit(struct mbox *m, reg_t start)
 {
-  struct mbox *m;
-
-  m = (struct mbox *) start;
-
   m->swaiting = nil;
   m->rwaiting = nil;
 
@@ -41,14 +37,14 @@ mboxnew(reg_t start, size_t len)
   m->rtail = 0;
   m->wtail = 0;
 
-  m->len = (len - sizeof(struct mbox)) / sizeof(struct message);
+  m->messages = (struct message *) start;
+  m->len = PAGE_SIZE / sizeof(struct message);
+
   memset(m->messages, 0, m->len * sizeof(struct message));
-  
-  return m;
 }
 
 void
-mboxfree(struct mbox *m)
+mboxclose(struct mbox *m)
 {
   /* TODO: free stuff */
 }
@@ -77,10 +73,7 @@ mboxaddmessage(struct mbox *mbox, struct message *m)
     ntail = (otail + 1) % mbox->len;
   } while (!cas(&mbox->rtail, (void *) otail, (void *) ntail));
 
-  do {
-    p = mbox->rwaiting;
-  } while (p != nil && !cas(&mbox->rwaiting, p, p->wnext));
-
+  p = procwlistpop(&mbox->rwaiting);
   if (p != nil) {
     procready(p);
   }
@@ -91,43 +84,35 @@ mboxaddmessage(struct mbox *mbox, struct message *m)
 int
 ksendnb(int to, struct message *m)
 {
-  struct mbox *mbox;
   struct proc *p;
+
+  m->from = up->pid;
   
   p = findproc(to);
   if (p == nil) {
     return ERR;
   }
 
-  mbox = p->mbox;
-  if (mbox != nil) {
-    return mboxaddmessage(mbox, m);
-  } else {
-    return ERR;
-  }
+  return mboxaddmessage(&p->mbox, m);
 }
 
 int
 ksend(int to, struct message *m)
 {
-  struct mbox *mbox;
   struct proc *p;
   int r;
+
+  m->from = up->pid;
 
   p = findproc(to);
   if (p == nil) {
     return ERR;
   }
 
-  mbox = p->mbox;
-  if (mbox == nil) {
-    return ERR;
-  }
-
   while (true) {
-    r = mboxaddmessage(mbox, m);
+    r = mboxaddmessage(&p->mbox, m);
     if (r == EFULL) {
-      if (procwlistadd(&mbox->swaiting, up) == OK) {
+      if (procwlistadd(&p->mbox.swaiting, up) == OK) {
 	procsend();
       }
     } else {
@@ -151,49 +136,33 @@ mboxgetmessage(struct mbox *mbox, struct message *m)
     
   memmove(m, &mbox->messages[h], sizeof(struct message));
 
-  if (cas(&mbox->head, (void *) h, (void *) n)) {
-    return OK;
-  } else {
+  if (!cas(&mbox->head, (void *) h, (void *) n)) {
     return ERR;
   }
 
-  do {
-    p = mbox->swaiting;
-  } while (p != nil && !cas(&mbox->swaiting, p, p->wnext));
-
+  p = procwlistpop(&mbox->swaiting);
   if (p != nil) {
     procready(p);
   }
+
+  return OK;
 }
 
 int
 krecvnb(struct message *m)
 {
-  struct mbox *mbox;
-
-  mbox = up->mbox;
-  if (mbox == nil) {
-    return ERR;
-  }
-
-  return mboxgetmessage(mbox, m);
+  return mboxgetmessage(&up->mbox, m);
 }
 
 int
 krecv(struct message *m)
 {
-  struct mbox *mbox;
   int r;
 
-  mbox = up->mbox;
-  if (mbox == nil) {
-    return ERR;
-  }
-    
   while (true) {
-    r = mboxgetmessage(mbox, m);
+    r = mboxgetmessage(&up->mbox, m);
     if (r == EEMPTY) {
-      if (procwlistadd(&mbox->rwaiting, up) == OK) {
+      if (procwlistadd(&up->mbox.rwaiting, up) == OK) {
 	procrecv();
       }
     } else {

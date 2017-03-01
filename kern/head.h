@@ -25,17 +25,21 @@
  *
  */
 
-#include <libc.h>
+#include <c.h>
 #include <syscalls.h>
-#include <message.h>
+#include <com.h>
 #include <stdarg.h>
 #include <string.h>
+
+struct heappage {
+  struct heappage *next;
+};
 
 struct mbox {
   size_t head, rtail, wtail;
   struct proc *swaiting, *rwaiting;
   size_t len;
-  struct message messages[];
+  struct message *messages;
 };
 
 typedef enum {
@@ -57,17 +61,18 @@ struct proc {
   int pid;
 
   reg_t kstack;
-  struct stack ustack;
 
-  struct mbox *mbox;
-
+  struct heappage *heap;
   struct addrspace *addrspace;
+  struct ustack ustack;
+  struct mbox mbox;
 };
 
 struct proc *
 procnew(reg_t page,
 	reg_t kstack,
-	struct mbox *mbox,
+	reg_t mbox,
+	struct heappage *heap,
 	struct addrspace *addrspace);
 
 void
@@ -90,6 +95,9 @@ findproc(int pid);
 
 int
 procwlistadd(struct proc **pp, struct proc *p);
+
+struct proc *
+procwlistpop(struct proc **pp);
 
  /* Must all be called with interrupts disabled */
 void
@@ -114,11 +122,17 @@ forkfunc(struct proc *, int (*func)(void *), void *);
 reg_t
 forkchild(struct proc *);
 
-struct mbox *
-mboxnew(reg_t start, size_t len);
+struct heappage *
+heappop(void);
 
 void
-mboxfree(struct mbox *m);
+heapadd(void *start);
+
+void
+mboxinit(struct mbox *mbox, reg_t start);
+
+void
+mboxclose(struct mbox *m);
 
 int
 ksendnb(int pid, struct message *m);
@@ -132,20 +146,17 @@ krecvnb(struct message *m);
 int
 krecv(struct message *m);
 
-reg_t
-kgetpage(void);
-
 void
-stackinit(struct stack *s);
+ustackinit(struct ustack *s);
 
 int
-stackcopy(struct stack *n, struct stack *o);
+ustackcopy(struct ustack *n, struct ustack *o);
 
 void
-stackfree(struct stack *s);
+ustackfree(struct ustack *s);
 
 struct addrspace *
-addrspacenew(reg_t start, size_t len);
+addrspacenew(reg_t start);
 
 struct addrspace *
 addrspacecopy(struct addrspace *o);

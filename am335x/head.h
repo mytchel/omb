@@ -41,19 +41,16 @@
 #define PAGE_ALIGN(x)    (((x) + PAGE_SIZE - 1) & PAGE_MASK)
 #define PAGE_ALIGN_DN(x) (((x) - PAGE_SIZE + 1) & PAGE_MASK)
 
-
 struct label {
   uint32_t psr, sp, lr;
   uint32_t regs[13];
   uint32_t pc;
 } __attribute__((__packed__));
 
-
 typedef enum {
   INTR_on  = (uint32_t) 0,
   INTR_off = (uint32_t) MODE_DI,
 } intr_t;
-
 
 typedef enum {
   PAGE_ram,
@@ -66,17 +63,17 @@ struct pageholder {
   struct pageholder *next;
 };
 
-struct stack {
-  reg_t top, bottom, l2;
+struct ustack {
+  reg_t top, bottom;
+  uint32_t *tab;
 };
 
 struct l2 {
   reg_t va;
-  reg_t pa;
+  uint32_t *tab;
 };
 
 struct addrspace {
-  int refs;
   size_t l2len;
   struct l2 l2[];
 };

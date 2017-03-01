@@ -161,8 +161,8 @@ switch:
 	ldmfd r4, {r5 - r9}
 	stmia sp, {r5 - r9}
 	
-	;; ands r3, r2, #0xf
-	;; beq _user
+	ands r3, r2, #0xf
+	beq _user
 
 	@ kernel mode interrupted
 

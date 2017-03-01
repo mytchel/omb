@@ -50,11 +50,13 @@ sysexit(void)
 }
 
 reg_t
-sysfork(int flags)
+sysfork(void)
 {
-  reg_t page, kstack, mboxpage;
+  return ERR;
+  
+  #if 0
+  reg_t page, kstack, mbox;
   struct addrspace *addrspace;
-  struct mbox *mbox;
   struct proc *p;
   int r;
   
@@ -62,29 +64,25 @@ sysfork(int flags)
 
   page = kgetpage();
   kstack = kgetpage();
-  mboxpage = kgetpage();
-
-  mbox = mboxnew(mboxpage, PAGE_SIZE);
+  mbox = kgetpage();
 
   addrspace = nil;
   
-  if ((flags & FORK_cmem) == FORK_cmem) {
-    printf("copying mem\n");
-    addrspace = addrspacecopy(up->addrspace);
+  printf("sharing mem (for now)\n");
 
-  } else if ((flags & FORK_smem) == FORK_smem) {
-    printf("sharing mem\n");
+  addrspace = up->addrspace;
+  do {
+    r = addrspace->refs;
+  } while (!cas(&addrspace->refs, (void *) r, (void *) (r + 1)));
 
-    addrspace = up->addrspace;
-    do {
-      r = addrspace->refs;
-    } while (!cas(&addrspace->refs, (void *) r, (void *) (r + 1)));
- }
+  p = procnew(page, PAGE_SIZE,
+	      kstack, PAGE_SIZE,
+	      mbox, PAGE_SIZE,
+	      addrspace);
 
-  p = procnew(page, kstack, mbox, addrspace);
   printf("%i fork to new proc pid %i\n", up->pid, p->pid);
 
-  r = stackcopy(&p->ustack, &up->ustack);
+  r = ustackcopy(&p->ustack, &up->ustack);
   if (r != OK) {
     procexit(p);
     return r;
@@ -93,5 +91,6 @@ sysfork(int flags)
   r = forkchild(p);
 
   return r;
+  #endif
 }
 

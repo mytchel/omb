@@ -52,9 +52,9 @@ uint32_t
 ttb[4096]__attribute__((__aligned__(16*1024))) = { L1_FAULT };
 
 static struct addrspace *space = nil;
-static struct stack *stack = nil;
-static uint32_t spacelow = UINT_MAX, stacklow = UINT_MAX;
-static uint32_t spacehigh = 0, stackhigh = 0;
+static struct ustack *ustack = nil;
+static uint32_t spacelow = UINT_MAX, ustacklow = UINT_MAX;
+static uint32_t spacehigh = 0, ustackhigh = 0;
 
 void
 mmuinit(void)
@@ -106,11 +106,11 @@ mmuempty1space(void)
 }
 
 void
-mmuempty1stack(void)
+mmuempty1ustack(void)
 {
   uint32_t i;
 
-  for (i = stacklow; i <= stackhigh; i++) {
+  for (i = ustacklow; i <= ustackhigh; i++) {
     if ((ttb[i] & L1_TYPE) == L1_COARSE) {
       ttb[i] = L1_FAULT;
     }
@@ -118,18 +118,18 @@ mmuempty1stack(void)
 
   mmuinvalidate();
 
-  stacklow = UINT_MAX;
-  stackhigh = 0;
+  ustacklow = UINT_MAX;
+  ustackhigh = 0;
 }
 
 static void
-mmuinsertl2space(reg_t va, reg_t pa)
+mmuinsertl2space(reg_t va, uint32_t *l2)
 {
   reg_t l1;
 
   l1 = L1X(va);
 
-  ttb[l1] = pa | L1_COARSE;
+  ttb[l1] = (uint32_t) l2 | L1_COARSE;
   if (l1 > spacehigh) {
     spacehigh = l1;
   } else if (l1 < spacelow) {
@@ -138,32 +138,32 @@ mmuinsertl2space(reg_t va, reg_t pa)
 }
 
 static void
-mmuinsertl2stack(reg_t va, reg_t pa)
+mmuinsertl2ustack(reg_t va, uint32_t *l2)
 {
   reg_t l1;
 
   l1 = L1X(va);
 
-  ttb[l1] = pa | L1_COARSE;
-  if (l1 > stackhigh) {
-    stackhigh = l1;
-  } else if (l1 < stacklow) {
-    stacklow = l1;
+  ttb[l1] = (uint32_t) l2 | L1_COARSE;
+  if (l1 > ustackhigh) {
+    ustackhigh = l1;
+  } else if (l1 < ustacklow) {
+    ustacklow = l1;
   }
 }
 
 static void
-mmuswitchstack(struct stack *s)
+mmuswitchustack(struct ustack *s)
 {
-  if (s == stack) {
+  if (s == ustack) {
     return;
   } else {
-    mmuempty1stack();
-    stack = s;
+    mmuempty1ustack();
+    ustack = s;
   }
   
-  if (s->l2 != 0) {
-    mmuinsertl2stack(s->bottom, s->l2);
+  if (s->tab != 0) {
+    mmuinsertl2ustack(s->bottom, s->tab);
  }
 }
 
@@ -175,8 +175,8 @@ mmuswitchl2(struct l2 l2s[], size_t len)
 
   for (i = 0; i < len; i++) {
     l2 = &l2s[i];
-    if (l2->pa != 0) {
-      mmuinsertl2space(l2->va, l2->pa);
+    if (l2->tab != nil) {
+      mmuinsertl2space(l2->va, l2->tab);
     } else {
       break;
     }
@@ -201,78 +201,86 @@ mmuswitchaddrspace(struct addrspace *s)
 void
 mmuswitch(struct proc *p)
 {
-  mmuswitchstack(&p->ustack);
+  mmuswitchustack(&p->ustack);
   mmuswitchaddrspace(p->addrspace);
 }
 
 void
-stackinit(struct stack *s)
+ustackinit(struct ustack *s)
 {
   s->top = USTACK_TOP;
   s->bottom = USTACK_TOP;
-  s->l2 = nil;
+  s->tab = nil;
+}
+
+void
+ustackfree(struct ustack *s)
+{
+  reg_t pa;
+
+  if (s->tab == nil) {
+    return;
+  }
+  
+  while (s->bottom < s->top) {
+    pa = L2X(s->bottom);
+    heapadd((void *) (s->tab[pa] & PAGE_MASK));
+    s->bottom += PAGE_SIZE;
+  }
+
+  heapadd((void *) s->tab);
+  s->tab = nil;
 }
 
 int
-stackcopy(struct stack *n, struct stack *o)
+ustackcopy(struct ustack *n, struct ustack *o)
 {
-  uint32_t *ntab, *otab;
   reg_t pn, po;
 
-  stackinit(n);
+  ustackinit(n);
 
-  if (o->l2 == nil) {
+  if (o->tab == nil) {
     return OK;
   }
 
-  n->l2 = kgetpage();
-  memset((void *) n->l2, 0, PAGE_SIZE);
-
-  ntab = (uint32_t *) n->l2;
-  otab = (uint32_t *) o->l2;
+  n->tab = (uint32_t *) heappop();
+  if (n->tab == nil) {
+    return ENOMEM;
+  }
+  
+  memset((void *) n->tab, 0, PAGE_SIZE);
 
   for (n->bottom = o->top - PAGE_SIZE;
        n->bottom >= o->bottom;
        n->bottom -= PAGE_SIZE) {
 
-    pn = kgetpage();
+    pn = (reg_t) heappop();
     if (pn == nil) {
-      stackfree(n);
+      ustackfree(n);
+      return ENOMEM;
+    }
+
+    if (mappingaddl2(n->tab, n->bottom, pn, MEM_rw) != OK) {
+      heapadd((void *) pn);
+      ustackfree(n);
       return ERR;
     }
 
-    if (mappingaddl2(ntab, stack->bottom, pn, MEM_rw) != OK) {
-      /* TODO: free pn */
-      stackfree(n);
-      return ERR;
-    }
-
-    po = PAL2(otab[L2X(stack->bottom)]);
+    po = PAL2(o->tab[L2X(o->bottom)]);
     memmove((void *) pn, (void *) po, PAGE_SIZE);
   }
 
   return OK;
 }
 
-void
-stackfree(struct stack *s)
-{
-  /* TODO: free stuff */
-  
-  s->top = USTACK_TOP;
-  s->bottom = USTACK_TOP;
-  s->l2 = nil;
-}
-
 struct addrspace *
-addrspacenew(reg_t start, size_t len)
+addrspacenew(reg_t start)
 {
   struct addrspace *s;
 
   s = (struct addrspace *) start;
-  s->refs = 1;
-  s->l2len = (len - sizeof(struct addrspace) / sizeof(struct l2));
 
+  s->l2len = (PAGE_SIZE - sizeof(struct addrspace) / sizeof(struct l2));
   memset(s->l2, 0, s->l2len * sizeof(struct l2));
 
   return s;
@@ -287,33 +295,31 @@ addrspacecopy(struct addrspace *o)
 void
 addrspacefree(struct addrspace *s)
 {
-  int r;
-  
-  do {
-    r = s->refs;
-  } while (!cas(&s->refs, (void *) r, (void *) (r - 1)));
+  int i;
 
-  if (r > 1) {
-    return;
+  for (i = 0; i < s->l2len; i++) {
+    if (s->l2[i].va == nil) {
+      break;
+    } else {
+      heapadd(s->l2[i].tab);
+    }
   }
-
-  /* TODO: free stuff */
 }
 
 static struct l2 *
 getl2new(struct addrspace *s, struct l2 *l2, reg_t l1)
 {
   l2->va = l1;
-  l2->pa = kgetpage();
 
-  if (l2->pa == nil) {
+  l2->tab = (uint32_t *) heappop();
+  if (l2->tab == nil) {
     return nil;
   }
  
-  memset((void *) l2->pa, 0, PAGE_SIZE);
+  memset(l2->tab, 0, PAGE_SIZE);
 
-  if (up->addrspace == s) {
-    mmuinsertl2space(l2->va, l2->pa);
+  if (space == s) {
+    mmuinsertl2space(l2->va, l2->tab);
   }
   
   return l2;
@@ -325,7 +331,7 @@ getl2(struct addrspace *s, reg_t l1, bool add)
   size_t i;
 
   for (i = 0; i < s->l2len; i++) {
-    if (s->l2[i].pa == 0) {
+    if (s->l2[i].tab == nil) {
       if (add) {
 	return getl2new(s, &s->l2[i], l1);
       } else {
@@ -374,7 +380,6 @@ mappingadd(struct addrspace *s,
 	   int flags)
 {
   struct l2 *l2;
-  uint32_t *tab;
 
   printf("mapping add\n");
   l2 = getl2(s, L1X(va), true);
@@ -382,9 +387,7 @@ mappingadd(struct addrspace *s,
     return ERR;
   }
   
-  tab = (uint32_t *) l2->pa;
-
-  return mappingaddl2(tab, va, pa, flags);
+  return mappingaddl2(l2->tab, va, pa, flags);
 }
 
 int
@@ -392,22 +395,18 @@ mappingremove(struct addrspace *s,
 	      reg_t va)
 {
   struct l2 *l2;
-  uint32_t *tab;
 
   l2 = getl2(s, L1X(va), false);
   if (l2 == nil) {
     return ERR;
   }
   
-  tab = (uint32_t *) l2->pa;
-
-  if (tab[L2X(va)] == L2_FAULT) {
-    return ERR;
+  if (l2->tab[L2X(va)] != L2_FAULT) {
+    l2->tab[L2X(va)] = L2_FAULT;
+    return OK;
   } else {
-    tab[L2X(va)] = L2_FAULT;
+    return ERR;
   }
-
-  return OK;
 }
 
 reg_t
@@ -422,13 +421,13 @@ mappingfind(struct proc *p,
   int f;
 
   if (p->ustack.top >= va && p->ustack.bottom <= va) {
-    tab = (uint32_t *) p->ustack.l2;
+    tab = p->ustack.tab;
   } else {
     l2 = getl2(p->addrspace, L1X(va), false);
-    if (l2 == nil) {
-      return nil;
+    if (l2 != nil) {
+      tab = l2->tab;
     } else {
-      tab = (uint32_t *) l2->pa;
+      tab = nil;
     }
   }
 
@@ -452,42 +451,39 @@ mappingfind(struct proc *p,
 }
 
 int
-fixstack(struct stack *stack, reg_t addr)
+fixustack(struct ustack *s, reg_t addr)
 {
   reg_t new, bottom;
-  uint32_t *tab;
   
-  bottom = stack->bottom - PAGE_SIZE;
+  bottom = s->bottom - PAGE_SIZE;
 
-  if (stack->l2 == nil) {
-    stack->l2 = kgetpage();
-    if (stack->l2 == nil) {
+  if (s->tab == nil) {
+    s->tab = (uint32_t *) heappop();
+    if (s->tab == nil) {
       return ERR;
     }
 
-    mmuinsertl2stack(bottom, stack->l2);
+    mmuinsertl2ustack(bottom, s->tab);
   }
 
-  tab = (uint32_t *) stack->l2;
-  
-  new = kgetpage();
+  new = (reg_t) heappop();
   if (new == nil) {
     return ERR;
   }
 
-  stack->bottom = bottom;
+  s->bottom = bottom;
   
-  return mappingaddl2(tab, stack->bottom, new, MEM_rw);
+  return mappingaddl2(s->tab, s->bottom, new, MEM_rw);
 }
 
 int
 fixfault(reg_t addr)
 {
-  struct stack *stack;
+  struct ustack *s;
   
-  stack = &up->ustack;
-  if (addr < stack->bottom && addr + PAGE_SIZE > stack->bottom) {
-    return fixstack(stack, addr);
+  s = &up->ustack;
+  if (addr < s->bottom && addr + PAGE_SIZE > s->bottom) {
+    return fixustack(s, addr);
   }
 
   return ERR;

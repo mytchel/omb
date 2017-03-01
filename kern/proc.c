@@ -126,9 +126,8 @@ removefromlist(struct proc **l, struct proc *p)
 }
 	
 struct proc *
-procnew(reg_t page,
-	reg_t kstack,
-	struct mbox *mbox,
+procnew(reg_t page, reg_t kstack, reg_t mbox,
+	struct heappage *heap,
 	struct addrspace *addrspace)
 {
   int pos, code, ncode;
@@ -137,10 +136,12 @@ procnew(reg_t page,
   p = (struct proc *) page;
 
   p->kstack = kstack;
-  p->mbox = mbox;
-  p->addrspace = addrspace;
+  p->heap = heap;
 
-  stackinit(&p->ustack);
+  mboxinit(&p->mbox, mbox);
+  ustackinit(&p->ustack);
+
+  p->addrspace = addrspace;
 
   p->state = PROC_suspend;
 
@@ -170,7 +171,6 @@ void
 procexit(struct proc *p)
 {
   struct addrspace *space;
-  struct mbox *mbox;
   intr_t i;
 
   printf("procexit %i\n", p->pid);
@@ -179,7 +179,7 @@ procexit(struct proc *p)
     removefromlist(&ready, p);
   }
 
-  stackfree(&p->ustack);
+  ustackfree(&p->ustack);
 
   do {
     space = p->addrspace;
@@ -189,13 +189,7 @@ procexit(struct proc *p)
     addrspacefree(space);
   }
 
-  do {
-    mbox = p->mbox;
-  } while (!cas(&p->mbox, mbox, nil));
-  
-  if (mbox != nil) {
-    mboxfree(mbox);
-  }
+  mboxclose(&p->mbox);
 
   /* TODO: free kstack and proc page */
 
@@ -295,4 +289,16 @@ procwlistadd(struct proc **pp, struct proc *p)
   } else {
     return ERR;
   }
+}
+
+struct proc *
+procwlistpop(struct proc **pp)
+{
+  struct proc *p;
+
+  do {
+    p = *pp;
+  } while (p != nil && !cas(pp, p, p->wnext));
+
+  return p;
 }

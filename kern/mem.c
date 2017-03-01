@@ -27,29 +27,26 @@
 
 #include <head.h>
 
-void *
-memmove(void *dest, const void *src, size_t len)
+struct heappage *
+heappop(void)
 {
-  uint8_t *d;
-  const uint8_t *s;
-	
-  d = dest;
-  s = src;
+  struct heappage *p;
 
-  while (len-- > 0) {
-    *d++ = *s++;
-  }
-		
-  return dest;
+  do {
+    p = up->heap;
+  } while (p != nil && !cas(&up->heap, p, p->next));
+
+  return p;
 }
 
-void *
-memset(void *dest, int c, size_t len)
+void
+heapadd(void *start)
 {
-  uint8_t *bb = dest;
-	
-  while (len-- > 0)
-    *bb++ = c;
-		
-  return dest;
+  struct heappage *p;
+
+  p = (struct heappage *) start;
+
+  do {
+    p->next = up->heap;
+  } while (!cas(&up->heap, p->next, p));
 }

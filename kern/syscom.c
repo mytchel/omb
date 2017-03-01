@@ -25,36 +25,52 @@
  *
  */
 
-#ifndef _LIBC_H_
-#define _LIBC_H_
+#include <head.h>
 
-#include <err.h>
-#include <types.h>
+reg_t
+syssendnb(int to, struct message *m)
+{
+  printf("%i called sendnb\n", up->pid);
 
-int
-exit(void) __attribute__((noreturn));
+  if (validaddr(m, sizeof(struct message), MEM_rw) != OK) {
+    return ERR;
+  }
+  
+  return ksendnb(to, m);
+}
 
-/* Should process aspects be (c)opied, created a(n)ew, or (s)hared. */
+reg_t
+syssend(int to, struct message *m)
+{
+  printf("%i called send to %i, type %i\n", up->pid, to, m->type);
+ 
+  if (validaddr(m, sizeof(struct message), MEM_rw) != OK) {
+    return ERR;
+  }
 
-#define FORK_smem	(0<<0)
-#define FORK_cmem	(1<<0)
+  return ksend(to, m);
+}
 
-int
-fork(unsigned int flags);
+reg_t
+sysrecvnb(struct message *m)
+{
+  printf("%i called recvnb\n", up->pid);
+ 
+  if (validaddr(m, sizeof(struct message), MEM_rw) != OK) {
+    return ERR;
+  }
 
-int
-getpid(void);
+  return krecvnb(m);
+}
 
-bool
-cas(void *addr, void *old, void *new);
+reg_t
+sysrecv(struct message *m)
+{
+  printf("%i called recv\n", up->pid);
+ 
+  if (validaddr(m, sizeof(struct message), MEM_rw) != OK) {
+    return ERR;
+  }
 
-#define roundptr(x) (x % sizeof(void *) != 0 ?			 \
-		     x + sizeof(void *) - (x % sizeof(void *)) : \
-		     x)
-
-#define STATIC_ASSERT(COND, MSG) typedef char static_assertion_##MSG[(COND)?1:-1]
-
-#define MEM_ro 0
-#define MEM_rw 1
-
-#endif
+  return krecv(m);
+}

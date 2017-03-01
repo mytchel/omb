@@ -83,11 +83,12 @@ KSRC_C := \
         timer.c                 \
         memproc.c               \
         mainproc.c              \
+        ../kern/util.c          \
         ../kern/mem.c           \
-        ../kern/message.c       \
+        ../kern/com.c           \
         ../kern/systab.c        \
         ../kern/sysproc.c       \
-        ../kern/sysmes.c        \
+        ../kern/syscom.c        \
         ../kern/string.c        \
         ../kern/printf.c        \
         ../kern/proc.c          \

@@ -93,7 +93,10 @@ funcloader:
 	ldr lr, =1f
 	ldmia sp!, {r0, pc}
 1:
-	b 1b
+	ldr r0, =up
+	ldr r0, [r0]
+	bl procexit
+	b .
 
 	
 fsrstatus:

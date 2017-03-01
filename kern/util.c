@@ -25,32 +25,31 @@
  *
  */
 
-#include <c.h>
-#include <com.h>
+#include <head.h>
 
-int
-main(void)
+void *
+memmove(void *dest, const void *src, size_t len)
 {
-  struct message m;
-  struct mtest *t;
-  int i;
+  uint8_t *d;
+  const uint8_t *s;
+	
+  d = dest;
+  s = src;
 
-  t = (struct mtest *) m.body;
-  
-  for (i = 0; i < 10; i++) {
-    m.type = 1;
-
-    t->buf[0] = 'H' + i;
-    t->buf[1] = 'm';
-    t->buf[2] = 'm';
-    t->buf[3] = 0;
-
-    send(1, &m);
+  while (len-- > 0) {
+    *d++ = *s++;
   }
-
-  while (true)
-    ;
-       
-  return OK;
+		
+  return dest;
 }
 
+void *
+memset(void *dest, int c, size_t len)
+{
+  uint8_t *bb = dest;
+	
+  while (len-- > 0)
+    *bb++ = c;
+		
+  return dest;
+}

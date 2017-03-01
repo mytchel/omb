@@ -31,11 +31,28 @@
 static int
 memprocfunc(void *arg)
 {
-  struct message in;
+  struct message m;
+  struct mtest *t;
+  int from;
+
+  printf("memproc on pid %i\n", up->pid);
   
   while (true) {
-    if (krecv(&in) == OK) {
-      printf("memproc got message of type %i\n", in.type);
+    if (krecv(&m) == OK) {
+      printf("memproc got message from %i of type %i\n", m.from, m.type);
+      if (m.type == 1) {
+	t = (struct mtest *) m.body;
+
+	m.type = 1;
+	printf("memproc got message from %i saying '%s'\n",
+	       m.from, t->buf);
+
+	from = m.from;
+
+	memmove(t->buf, "Hello", 6);
+
+	ksend(from, &m);
+      }
     }
   }
 
@@ -45,17 +62,23 @@ memprocfunc(void *arg)
 void
 memprocinit(void)
 {
-  reg_t page, kstack, mboxpage;
-  struct mbox *mbox;
+  reg_t page, kstack, mbox;
+  struct heappage *heap, *h;
   struct proc *p;
+  size_t hsize;
 
   page = getrampage();
   kstack = getrampage();
-  mboxpage = getrampage();
+  mbox = getrampage();
 
-  mbox = mboxnew(mboxpage, PAGE_SIZE);
-
-  p = procnew(page, kstack, mbox, nil);
+  heap = nil;
+  for (hsize = 0; hsize < 1024 * 64; hsize += PAGE_SIZE) {
+    h = (struct heappage *) getrampage();
+    h->next = heap;
+    heap = h;
+  }
+  
+  p = procnew(page, kstack, mbox, heap, nil);
 
   forkfunc(p, &memprocfunc, nil);
   procready(p);
