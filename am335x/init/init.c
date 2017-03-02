@@ -40,7 +40,9 @@ main(void)
   req.flags = MEM_r|MEM_w;
   req.pa = 0;
 
-  send(1, (struct message *) &req);
+  if (send(1, (struct message *) &req) != OK) {
+    exit();
+  }
 
   while (true) {
     if (recv((struct message *) &resp) == OK) {

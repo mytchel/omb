@@ -170,9 +170,30 @@ getrampage(void)
 {
   struct pageholder *p;
 
-  do {
-    p = rampages;
-  } while (cas(&rampages, p, p->next) != OK);
+  p = rampages;
+  rampages = p->next;
 
   return p->pa;
+}
+
+reg_t
+getiopage(reg_t pa)
+{
+  struct pageholder **p, *w;
+
+  for (p = &iopages; *p != nil; p = &((*p)->next)) {
+    if ((*p)->pa == pa) {
+      w = *p;
+      *p = (*p)->next;
+
+      if (w->refs == 0) {
+	w->refs = 1;
+	return pa;
+      } else {
+	return nil;
+      }
+    }
+  }
+
+  return nil;
 }

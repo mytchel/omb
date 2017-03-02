@@ -38,7 +38,7 @@ fillgrant(struct grant *g, int flags, void *start, size_t len)
   g->npages = len / PAGE_SIZE;
 
   for (n = 0; n < g->npages; n++) {
-    g->pages[n] = mappingfind(up->addrspace,
+    g->pages[n] = mappingfind(up->space,
 			      (reg_t) start + n * PAGE_SIZE,
 			      &f);
 
@@ -50,7 +50,7 @@ fillgrant(struct grant *g, int flags, void *start, size_t len)
 
   /* Should this be happening here in mmap? */
   for (n = 0; n < g->npages; n++) {
-    mappingremove(up->addrspace, (reg_t) start + n * PAGE_SIZE);
+    mappingremove(up->space, (reg_t) start + n * PAGE_SIZE);
   }
 
   return grantready(g);
@@ -132,13 +132,13 @@ sysmmap(int flags, void *start, size_t len)
 
   va = (reg_t) start;
   for (i = 0; i < up->grant.npages; i++) {
-    pa = mappingfind(up->addrspace, va, &f);
+    pa = mappingfind(up->space, va, &f);
     if (pa != nil) {
       /* TODO: do something about the mapped pages. Not sure what. */
       return ERR;
     }
 
-    if (mappingadd(up->addrspace, va, up->grant.pages[i], flags) != OK) {
+    if (mappingadd(up->space, va, up->grant.pages[i], flags) != OK) {
       /* TODO: do something about the mapped pages. Not sure what. */
       return ERR;
     }

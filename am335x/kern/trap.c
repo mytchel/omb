@@ -150,11 +150,6 @@ trap(reg_t pc, int type)
 
   case ABORT_PREFETCH:
     printf("%i prefetch abort at 0x%h\n", up->pid, pc);
-
-    if (fixfault(pc) == OK) {
-      return;
-    }
-
     break;
 
   case ABORT_DATA:
@@ -166,11 +161,7 @@ trap(reg_t pc, int type)
     switch (fsr) {
     case 0x5: /* section translation */
     case 0x7: /* page translation */
-      if (fixfault(addr) == OK) {
-	return;
-      }
-      
-      break;
+
     case 0x0: /* vector */
     case 0x1: /* alignment */
     case 0x3: /* also alignment */

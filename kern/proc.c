@@ -76,7 +76,7 @@ schedule(void)
     nilfunc();
  } else {
     up->state = PROC_oncpu;
-    mmuswitch(up);
+    mmuswitch(up->space);
     gotolabel(&up->label);
   }
 }
@@ -128,7 +128,7 @@ removefromlist(struct proc **l, struct proc *p)
 struct proc *
 procnew(reg_t page, reg_t kstack, reg_t mbox, reg_t grant,
 	struct heappage *heap,
-	struct addrspace *addrspace)
+	struct space *space)
 {
   int pos, code, ncode;
   struct proc *p;
@@ -139,10 +139,9 @@ procnew(reg_t page, reg_t kstack, reg_t mbox, reg_t grant,
   p->heap = heap;
 
   mboxinit(&p->mbox, mbox);
-  ustackinit(&p->ustack);
   grantinit(&p->grant, grant);
 
-  p->addrspace = addrspace;
+  p->space = space;
 
   p->state = PROC_suspend;
 
@@ -171,7 +170,7 @@ procnew(reg_t page, reg_t kstack, reg_t mbox, reg_t grant,
 void
 procexit(struct proc *p)
 {
-  struct addrspace *space;
+  struct space *space;
   intr_t i;
 
   printf("procexit %i\n", p->pid);
@@ -180,14 +179,12 @@ procexit(struct proc *p)
     removefromlist(&ready, p);
   }
 
-  ustackfree(&p->ustack);
-
   do {
-    space = p->addrspace;
-  } while (cas(&p->addrspace, space, nil) != OK);
+    space = p->space;
+  } while (cas(&p->space, space, nil) != OK);
 
   if (space != nil) {
-    addrspacefree(space);
+    spacefree(space);
   }
 
   mboxclose(&p->mbox);

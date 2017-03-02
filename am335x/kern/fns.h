@@ -112,4 +112,7 @@ mainprocinit(void);
 reg_t
 getrampage(void);
 
+reg_t
+getiopage(reg_t);
+
 #endif

@@ -75,7 +75,6 @@ mboxaddmessage(struct mbox *mbox, struct message *m)
 
   p = procwlistpop(&mbox->rwaiting);
   if (p != nil) {
-    printf("%i waking up %i for message\n", up->pid, p->pid);
     procready(p);
   }
   
@@ -161,15 +160,12 @@ krecv(struct message *m)
   int r;
 
   while (true) {
-    printf("%i trying to get message\n", up->pid);
     r = mboxgetmessage(&up->mbox, m);
     if (r == EEMPTY) {
       if (procwlistadd(&up->mbox.rwaiting, up) == OK) {
-	printf("%i waiting for message\n", up->pid);
 	procrecv();
       }
     } else {
-      printf("got message, return\n");
       return r;
     }
   }

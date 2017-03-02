@@ -49,14 +49,26 @@ mainprocfunc(void *arg)
   printf("init code at 0x%h len %i\n", pa, initcodelen);
 
   for (o = 0; o < initcodelen; o += PAGE_SIZE) {
-    printf("map from 0x%h to 0x%h\n", pa + o, va + o);
-    r = mappingadd(up->addrspace, va + o, pa + o, MEM_r|MEM_w|MEM_x);
+    r = mappingadd(up->space, va + o, pa + o, MEM_r|MEM_w|MEM_x);
     if (r != OK) {
       printf("error mapping 0x%h -> 0x%h for init!\n",
 	     va + o, pa + o);
-      return ERR;
+      return r;
     }
   }
+
+  pa = (reg_t) heappop();
+  if (pa == nil) {
+    printf("mainproc failed to get a page for user stack!\n");
+    return ENOMEM;
+  }
+  
+  r = mappingadd(up->space, USTACK_TOP - PAGE_SIZE, pa, MEM_r|MEM_w);
+  if (r != OK) {
+    printf("error mapping 0x%h -> 0x%h for init!\n",
+	   USTACK_TOP - PAGE_SIZE, pa);
+    return r;
+  } 
 
   memset(&u, 0, sizeof(struct label));
   u.psr = MODE_USR;
@@ -67,14 +79,14 @@ mainprocfunc(void *arg)
   
   droptouser(&u, up->kstack + PAGE_SIZE);
   
-  return OK;
+  return ERR;
 }
 
 void
 mainprocinit(void)
 {
   reg_t page, kstack, mbox, grant, aspage;
-  struct addrspace *addrspace;
+  struct space *space;
   struct heappage *heap, *h;
   struct proc *p;
   size_t hsize;
@@ -92,9 +104,9 @@ mainprocinit(void)
     heap = h;
   }
  
-  addrspace = addrspacenew(aspage);
+  space = spacenew(aspage);
 
-  p = procnew(page, kstack, mbox, grant, heap, addrspace);
+  p = procnew(page, kstack, mbox, grant, heap, space);
 
   forkfunc(p, &mainprocfunc, nil);
   procready(p);

@@ -84,8 +84,7 @@ struct proc {
   reg_t kstack;
 
   struct heappage *heap;
-  struct addrspace *addrspace;
-  struct ustack ustack;
+  struct space *space;
   struct mbox mbox;
   struct grant grant;
 };
@@ -99,7 +98,7 @@ procnew(reg_t page,
 	reg_t mbox,
 	reg_t grant,
 	struct heappage *heap,
-	struct addrspace *addrspace);
+	struct space *space);
 
 void
 procexit(struct proc *p);
@@ -172,42 +171,30 @@ krecvnb(struct message *m);
 int
 krecv(struct message *m);
 
-void
-ustackinit(struct ustack *s);
+struct space *
+spacenew(reg_t start);
 
-int
-ustackcopy(struct ustack *n, struct ustack *o);
-
-void
-ustackfree(struct ustack *s);
-
-struct addrspace *
-addrspacenew(reg_t start);
-
-struct addrspace *
-addrspacecopy(struct addrspace *o);
+struct space *
+spacecopy(struct space *o);
 
 void
-addrspacefree(struct addrspace *s);
-
-int
-fixfault(reg_t addr);
+spacefree(struct space *s);
 
 int
 validaddr(void *addr, size_t len, int flags);
 
 int
-mappingadd(struct addrspace *s,
+mappingadd(struct space *s,
 	   reg_t va,
 	   reg_t pa,
 	   int flags);
 
 int
-mappingremove(struct addrspace *s,
+mappingremove(struct space *s,
 	      reg_t va);
 
 reg_t
-mappingfind(struct addrspace *s,
+mappingfind(struct space *s,
 	    reg_t va,
 	    int *flags);
 
@@ -230,7 +217,7 @@ int
 grantready(struct grant *g);
 
 void
-mmuswitch(struct proc *p);
+mmuswitch(struct space *s);
 
 void *
 memmove(void *dest, const void *src, size_t len);

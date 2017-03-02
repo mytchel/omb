@@ -52,11 +52,12 @@ sysexit(void)
 reg_t
 sysfork(void)
 {
+  printf("%i called fork\n", up->pid);
   return ERR;
   
   #if 0
   reg_t page, kstack, mbox;
-  struct addrspace *addrspace;
+  struct space *space;
   struct proc *p;
   int r;
   
@@ -66,19 +67,19 @@ sysfork(void)
   kstack = kgetpage();
   mbox = kgetpage();
 
-  addrspace = nil;
+  space = nil;
   
   printf("sharing mem (for now)\n");
 
-  addrspace = up->addrspace;
+  space = up->space;
   do {
-    r = addrspace->refs;
-  } while (cas(&addrspace->refs, (void *) r, (void *) (r + 1)) != OK);
+    r = space->refs;
+  } while (cas(&space->refs, (void *) r, (void *) (r + 1)) != OK);
 
   p = procnew(page, PAGE_SIZE,
 	      kstack, PAGE_SIZE,
 	      mbox, PAGE_SIZE,
-	      addrspace);
+	      space);
 
   printf("%i fork to new proc pid %i\n", up->pid, p->pid);
 

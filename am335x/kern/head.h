@@ -25,27 +25,45 @@
  *
  */
 
-#include <head.h>
-#include "fns.h"
+#include <types.h>
+#include <mach.h>
+#include "trap.h"
 
-int
-kmain(void)
-{
-  puts("OMB Booting...\n");
+#define USTACK_TOP	 0x20000000
 
-  intcinit();
-  memoryinit();
-  watchdoginit();
-  timersinit();
+#define TICKS_MIN        20
+#define QUANTA_MAX      100
+#define QUANTA_DEF       50
+#define QUANTA_MIN       10
 
-  memprocinit();
-  mainprocinit();
+#define PAGE_ALIGN(x)    (((x) + PAGE_SIZE - 1) & PAGE_MASK)
+#define PAGE_ALIGN_DN(x) (((x) - PAGE_SIZE + 1) & PAGE_MASK)
 
-  puts("schedule!\n");
-  
-  schedule();
-  
-  /* Never reached */
-  return 0;
-}
+typedef enum {
+  INTR_on  = (uint32_t) 0,
+  INTR_off = (uint32_t) MODE_DI,
+} intr_t;
 
+typedef enum {
+  PAGE_ram,
+  PAGE_io,
+} page_t;
+
+struct pageholder {
+  reg_t pa;
+  page_t type;
+  int refs;
+  struct pageholder *next;
+};
+
+struct l2 {
+  reg_t va;
+  uint32_t *tab;
+};
+
+struct space {
+  size_t l2len;
+  struct l2 l2[];
+};
+
+#include "../../kern/head.h"

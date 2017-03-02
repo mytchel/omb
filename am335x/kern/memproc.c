@@ -40,6 +40,31 @@ getrampages(struct grant *g, size_t len)
 
   for (i = 0; i < g->npages; i++) {
     g->pages[i] = getrampage();
+    if (g->pages[i] == nil) {
+      /* TODO: add pages back */
+      return ERR;
+    }
+  }
+
+  return OK;
+}
+
+static int
+getiopages(struct grant *g, reg_t pa, size_t len)
+{
+  size_t i;
+  
+  g->npages = len / PAGE_SIZE;
+  if (g->npages >= g->maxnpages) {
+    return ERR;
+  }
+
+  for (i = 0; i < g->npages; i++) {
+    g->pages[i] = getiopage(pa + i * PAGE_SIZE);
+    if (g->pages[i] == nil) {
+      /* TODO: add pages back */
+      return ERR;
+    }
   }
 
   return OK;
@@ -74,26 +99,20 @@ handlereq(struct memreq *req)
 
   if (req->pa == nil) {
     /* random ram page */
-    printf("get ram pages\n");
     resp.ret = getrampages(g, req->len);
-    if (resp.ret == OK) {
-      printf("make grant ready\n");
-      grantready(g);
-    } else {
-      printf("failed\n");
-      if (grantuntake(g) != OK) {
-	printf("memproc failed to untake grant after failing to get pages!\n");
-      }
-      
-      return ksend(req->from, (struct message *) &resp);
-    }
   } else {
     /* specific pages */
-    resp.ret = ERR;
+    resp.ret = getiopages(g, req->pa, req->len);
   }
-  
 
-  printf("send response to %i\n", req->from);
+  if (resp.ret == OK) {
+    grantready(g);
+  } else {
+    if (grantuntake(g) != OK) {
+      printf("memproc failed to untake grant after failing to get pages!\n");
+    }
+  }
+      
   return ksend(req->from, (struct message *) &resp);
 }
 
@@ -106,7 +125,6 @@ memprocfunc(void *arg)
   
   while (true) {
     if (krecv(&m) == OK) {
-      printf("memproc got message from %i of type %i\n", m.from, m.type);
       if (m.type == COM_MEMREQ) {
 	if (handlereq((struct memreq *) &m) != OK) {
 	  printf("error handling request!\n");

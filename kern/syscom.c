@@ -72,8 +72,5 @@ sysrecv(struct message *m)
     return ERR;
   }
 
-  int r;
-  r = krecv(m);
-  printf("%i got message, return to user\n", up->pid);
-  return r;
+  return krecv(m);
 }

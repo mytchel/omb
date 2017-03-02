@@ -40,7 +40,7 @@ CFLAGS := -std=c89 -O3 \
 	-Wall -Werror \
 	-mcpu=cortex-a8 \
 	-nostdinc -ffreestanding \
-	-Iinclude -I../include -I.
+	-Iinclude -I../include -Ikern/.
 
 LDFLAGS += -nostdlib -nodefaultlibs -static \
 	-L/usr/local/lib/gcc/arm-none-eabi/4.9.3/
@@ -68,21 +68,21 @@ CLEAN += $(IOBJECTS)
 
 
 KSRC_A := \
-        vectors.S               \
-        asm.S
+        kern/vectors.S          \
+        kern/asm.S
 
 
 KSRC_C := \
-        main.c                  \
-        trap.c                  \
-        mem.c                   \
-        mmu.c                   \
-        nil.c                   \
-        uart.c                  \
-        fork.c                  \
-        timer.c                 \
-        memproc.c               \
-        mainproc.c              \
+        kern/main.c             \
+        kern/trap.c             \
+        kern/mem.c              \
+        kern/mmu.c              \
+        kern/nil.c              \
+        kern/uart.c             \
+        kern/fork.c             \
+        kern/timer.c            \
+        kern/memproc.c          \
+        kern/mainproc.c         \
         ../kern/util.c          \
         ../kern/mem.c           \
         ../kern/com.c           \
@@ -131,9 +131,9 @@ _init.c: init.bin
 
 
 CLEAN += $(TARGET).elf $(TARGET).list
-am335x.elf: kernel.ld $(KOBJECTS)
+am335x.elf: kern/kernel.ld $(KOBJECTS)
 	$(LD) $(LDFLAGS) \
-		-T kernel.ld -Ttext $(loadaddr) \
+		-T kern/kernel.ld -Ttext $(loadaddr) \
 		-o $@ $(KOBJECTS) -lgcc
 
 
