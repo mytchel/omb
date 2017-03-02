@@ -35,7 +35,10 @@ int
 exit(void) __attribute__((noreturn));
 
 int
-fork(void);
+fork(void *page, void *kstack,
+     void *ustacktop,
+     void *mbox, void *grant,
+     void *kheap, size_t hsize);
 
 int
 getpid(void);

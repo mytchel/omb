@@ -30,13 +30,13 @@
 #include <mem.h>
 
 int
-main(void)
+getmem(void *addr, size_t len)
 {
   struct memresp resp;
   struct memreq req;
 
   req.type = COM_MEMREQ;
-  req.len = 0x4000;
+  req.len = len;
   req.flags = MEM_r|MEM_w;
   req.pa = 0;
 
@@ -54,12 +54,42 @@ main(void)
     }
   }  
 
-  if (mmap(MEM_r|MEM_w, (void *) 0x8000, 0x4000) != OK) {
+  return mmap(MEM_r|MEM_w, addr, len);
+}
+
+int
+main(void)
+{
+  struct message m;
+  int f;
+  
+  if (getmem((void *) 0x4000, 0x8000) != OK) {
     return ERR;
   }
 
-  while (true)
-    ;
+  if (getmem((void *) 0x20000, 0x4000) != OK) {
+    return ERR;
+  }
+
+  if (getmem((void *) 0x0ffff000, 0x1000) != OK) {
+    return ERR;
+  }
+  
+  f = fork((void *) 0x4000, (void *) 0x5000,
+	   (void *) 0x10000000,
+	   (void *) 0x6000, (void *) 0x7000,
+	   (void *) 0x20000, 0x4000);
+
+  if (f < 0) {
+    return ERR;
+  } else if (f == 0) {
+    while (recv(&m) == OK)
+      ;
+  } else {
+    m.type = 4;
+    while (send(f, &m) == OK)
+      ;
+  }
        
   return OK;
 }

@@ -46,7 +46,25 @@ mboxinit(struct mbox *m, reg_t start)
 void
 mboxclose(struct mbox *m)
 {
-  /* TODO: free stuff */
+  struct proc *p;
+  void *messages;
+  
+  m->len = 0;
+  m->head = m->rtail = m->wtail = 0;
+
+  do {
+    messages = m->messages;
+  } while (cas(&m->messages, messages, nil));
+  
+  heapadd(messages);
+
+  while ((p = procwlistpop(&m->swaiting)) != nil) {
+    procready(p);
+  }
+
+  while ((p = procwlistpop(&m->rwaiting)) != nil) {
+    procready(p);
+  }
 }
 
 static int
@@ -109,15 +127,16 @@ ksend(int to, struct message *m)
     return ERR;
   }
 
-  while (true) {
-    r = mboxaddmessage(&p->mbox, m);
-    if (r == EFULL) {
-      if (procwlistadd(&p->mbox.swaiting, up) == OK) {
-	procsend();
-      }
+  r = mboxaddmessage(&p->mbox, m);
+  if (r == EFULL) {
+    if (procwlistadd(&p->mbox.swaiting, up) == OK) {
+      procsend();
+      return ksend(to, m);
     } else {
-      return r;
+      return ERR;
     }
+  } else {
+    return r;
   }
 }
 
@@ -159,14 +178,15 @@ krecv(struct message *m)
 {
   int r;
 
-  while (true) {
-    r = mboxgetmessage(&up->mbox, m);
-    if (r == EEMPTY) {
-      if (procwlistadd(&up->mbox.rwaiting, up) == OK) {
-	procrecv();
-      }
+  r = mboxgetmessage(&up->mbox, m);
+  if (r == EEMPTY) {
+    if (procwlistadd(&up->mbox.rwaiting, up) == OK) {
+      procrecv();
+      return krecv(m);
     } else {
-      return r;
+      return ERR;
     }
+  } else {
+    return r;
   }
 }

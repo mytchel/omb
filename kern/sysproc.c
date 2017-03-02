@@ -50,48 +50,122 @@ sysexit(void)
 }
 
 reg_t
-sysfork(void)
+sysfork(void *page, void *kstack, void *ustacktop, va_list ap)
 {
-  printf("%i called fork\n", up->pid);
-  return ERR;
-  
-  #if 0
-  reg_t page, kstack, mbox;
+  reg_t ppage, pkstack, pmbox, pgrant, pheap, vheap;
+  int pagef, kstackf, mboxf, grantf;
+  void *mbox, *grant, *heapstart;
+  struct heappage *heap, *h;
+  size_t hsize, size;
   struct space *space;
   struct proc *p;
-  int r;
+  int r, f;
   
   printf("%i called fork\n", up->pid);
 
-  page = kgetpage();
-  kstack = kgetpage();
-  mbox = kgetpage();
+  size = sizeof(void *) + sizeof(void *)
+    + sizeof(void *) + sizeof(size_t);
 
-  space = nil;
+  printf("check ap 0x%h\n", ap);
   
-  printf("sharing mem (for now)\n");
+  if (validaddr(ap, size, MEM_r) != OK) {
+    return ERR;
+  }
+  
+  mbox = va_arg(ap, void *);
+  grant = va_arg(ap, void *);
+  heapstart = va_arg(ap, void *);
+  hsize = va_arg(ap, size_t);
 
+  printf("mbox 0x%h\ngrant 0x%h\nheapstart 0x%h\n hsize %i\n",
+	 mbox, grant, heapstart, hsize);
+
+  printf("check page\n");
+  ppage = mappingfind(up->space, (reg_t) page, &pagef);
+  if (ppage == nil || checkflags(MEM_r|MEM_w, pagef) != OK) {
+    return ERR;
+  }
+  
+  printf("check page\n");
+  pkstack = mappingfind(up->space, (reg_t) kstack, &kstackf);
+  if (pkstack == nil || checkflags(MEM_r|MEM_w, kstackf) != OK) {
+    return ERR;
+  }
+
+  printf("check page\n");
+  pmbox = mappingfind(up->space, (reg_t) mbox, &mboxf);
+  if (pmbox == nil || checkflags(MEM_r|MEM_w, mboxf) != OK) {
+    printf("mbox mapping bad 0x%h %i\n", pmbox, mboxf);
+    return ERR;
+  }
+
+  printf("check page\n");
+  pgrant = mappingfind(up->space, (reg_t) grant, &grantf);
+  if (pgrant == nil || checkflags(MEM_r|MEM_w, grantf) != OK) {
+    return ERR;
+  }
+
+  printf("remove page\n");
+  if (mappingremove(up->space, (reg_t) page) != OK) {
+    goto err0;
+  }
+
+  printf("remove page\n");
+  if (mappingremove(up->space, (reg_t) kstack) != OK) {
+    goto err1;
+  }
+  
+  printf("remove page\n");
+  if (mappingremove(up->space, (reg_t) mbox) != OK) {
+    goto err2;
+  }
+  
+  printf("remove page\n");
+  if (mappingremove(up->space, (reg_t) grant) != OK) {
+    goto err3;
+  }
+
+  printf("remove heap pages\n");
+  heap = nil;
+  vheap = (reg_t) heapstart;
+  for (size = 0; size < hsize; size += PAGE_SIZE) {
+    pheap = mappingfind(up->space, vheap + size, &f);
+    if (pheap == nil || checkflags(MEM_r|MEM_w, f) != OK) {
+      goto err4;
+    } else if (mappingremove(up->space, vheap + size) != OK) {
+      goto err4;
+    }
+
+    h = (struct heappage *) pheap;
+    h->next = heap;
+    heap = h;
+  }
+
+  printf("get space\n");
   space = up->space;
   do {
     r = space->refs;
   } while (cas(&space->refs, (void *) r, (void *) (r + 1)) != OK);
 
-  p = procnew(page, PAGE_SIZE,
-	      kstack, PAGE_SIZE,
-	      mbox, PAGE_SIZE,
-	      space);
+  printf("make proc\n");
+  p = procnew(ppage, pkstack, pmbox, pgrant, heap, space);
 
   printf("%i fork to new proc pid %i\n", up->pid, p->pid);
 
-  r = ustackcopy(&p->ustack, &up->ustack);
-  if (r != OK) {
-    procexit(p);
-    return r;
-  }
-  
   r = forkchild(p);
 
   return r;
-  #endif
+
+ err4:
+  /* TODO: reclaim heap on failure. */
+  mappingadd(up->space, (reg_t) grant, pgrant, grantf);
+ err3:
+  mappingadd(up->space, (reg_t) mbox, pmbox, mboxf);
+ err2:
+  mappingadd(up->space, (reg_t) kstack, pkstack, kstackf);
+ err1:
+  mappingadd(up->space, (reg_t) page, ppage, pagef);
+ err0:
+  return ERR;
 }
 

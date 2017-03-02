@@ -27,7 +27,7 @@
 
 #include <head.h>
 
-struct heappage *
+void *
 heappop(void)
 {
   struct heappage *p;
@@ -36,7 +36,7 @@ heappop(void)
     p = up->heap;
   } while (p != nil && cas(&up->heap, p, p->next) != OK);
 
-  return p;
+  return (void *) p;
 }
 
 void
@@ -67,6 +67,12 @@ grantinit(struct grant *g, reg_t start)
   g->pages = (reg_t *) start;
 
   g->maxnpages = PAGE_SIZE / sizeof(reg_t);
+}
+
+void
+grantfree(struct grant *g)
+{
+  heapadd(g->pages);
 }
 
 int

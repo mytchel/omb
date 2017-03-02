@@ -57,7 +57,9 @@ exit:
 
 
 fork:
+	push {r3}
 	push {r12, lr}
+	add r3, sp, #(4 * 2)
 	mov r12, #SYSCALL_FORK
 	svc 0
 	pop {r12, pc}

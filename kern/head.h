@@ -142,12 +142,12 @@ droptouser(struct label *u, reg_t ksp)
   __attribute__((noreturn));
 
 void
-forkfunc(struct proc *, int (*func)(void *), void *);
+forkfunc(struct proc *p, int (*func)(void *), void *arg);
 
 reg_t
-forkchild(struct proc *);
+forkchild(struct proc *p);
 
-struct heappage *
+void *
 heappop(void);
 
 void
@@ -173,9 +173,6 @@ krecv(struct message *m);
 
 struct space *
 spacenew(reg_t start);
-
-struct space *
-spacecopy(struct space *o);
 
 void
 spacefree(struct space *s);
@@ -203,6 +200,9 @@ checkflags(int need, int got);
 
 void
 grantinit(struct grant *g, reg_t start);
+
+void
+grantfree(struct grant *g);
 
 int
 granttake(struct grant *g);

@@ -62,6 +62,7 @@ struct l2 {
 };
 
 struct space {
+  int refs;
   size_t l2len;
   struct l2 l2[];
 };

@@ -49,6 +49,8 @@ nextproc(void)
 
   if (p == nil) {
     return nil;
+  } else if (p->state != PROC_ready) {
+    return nextproc();
   } else {
     ready = p->snext;
     return p;
@@ -179,6 +181,15 @@ procexit(struct proc *p)
     removefromlist(&ready, p);
   }
 
+  mboxclose(&p->mbox);
+  grantfree(&p->grant);
+
+  i = setintr(INTR_off);
+
+  if (p == up) {
+    mmuswitch(nil);
+  }
+ 
   do {
     space = p->space;
   } while (cas(&p->space, space, nil) != OK);
@@ -187,9 +198,9 @@ procexit(struct proc *p)
     spacefree(space);
   }
 
-  mboxclose(&p->mbox);
+  setintr(i);
 
-  /* TODO: free kstack and proc page */
+  /* TODO: free kstack, proc and heap pages  */
 
   while (cas(&procs[p->pid >> 16], p, nil) != OK)
     ;
@@ -208,10 +219,6 @@ procsuspend(struct proc *p)
   intr_t i;
 
   p->state = PROC_suspend;
-
-  if (p->state == PROC_ready) {
-    removefromlist(&ready, p);
-  }
 
   i = setintr(INTR_off);
   if (p == up) {

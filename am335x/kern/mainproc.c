@@ -86,8 +86,8 @@ void
 mainprocinit(void)
 {
   reg_t page, kstack, mbox, grant, aspage;
-  struct space *space;
   struct heappage *heap, *h;
+  struct space *space;
   struct proc *p;
   size_t hsize;
   

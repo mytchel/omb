@@ -140,22 +140,25 @@ spacenew(reg_t start)
 
   s = (struct space *) start;
 
+  s->refs = 1;
   s->l2len = (PAGE_SIZE - sizeof(struct space) / sizeof(struct l2));
   memset(s->l2, 0, s->l2len * sizeof(struct l2));
 
   return s;
 }
 
-struct space *
-spacecopy(struct space *o)
-{
-  return nil;
-}
-
 void
 spacefree(struct space *s)
 {
-  int i;
+  int i, r;
+
+  do {
+    r = s->refs;
+  } while (cas(&s->refs, (void *) r, (void *) (r - 1)) != OK);
+
+  if (r > 0) {
+    return;
+  }
 
   for (i = 0; i < s->l2len; i++) {
     if (s->l2[i].tab != nil) {
@@ -167,21 +170,39 @@ spacefree(struct space *s)
 }
 
 static struct l2 *
-getl2new(struct space *s, struct l2 *l2, reg_t l1)
+getl2new(struct space *s, int i, reg_t l1)
 {
-  l2->va = l1;
-  l2->tab = (uint32_t *) heappop();
-  if (l2->tab == nil) {
+  uint32_t *tab;
+
+  tab = (uint32_t *) heappop();
+  if (tab == nil) {
     return nil;
   }
 
-  memset(l2->tab, 0, PAGE_SIZE);
+  while (cas(&s->l2[i].tab, nil, tab) != OK) {
+    if (s->l2[i].tab == nil) {
+      continue;
+    } else {
+      i++;
+      if (i < s->l2len) {
+	heapadd(tab);
+      } else {
+	return nil;
+      }
+    }
+  }
+
+  /* Not sure how to do this. This needs to be set before tab but
+   * can only be set if tab is nil. */
+  s->l2[i].va = l1;
+
+  memset(s->l2[i].tab, 0, PAGE_SIZE);
 
   if (space == s) {
-    ttb[l1] = (uint32_t) l2->tab | L1_COARSE;
+    ttb[l1] = (uint32_t) s->l2[i].tab | L1_COARSE;
   }
   
-  return l2;
+  return &s->l2[i];
 }
 
 static struct l2 *
@@ -191,11 +212,7 @@ getl2(struct space *s, reg_t l1, bool add)
 
   for (i = 0; i < s->l2len; i++) {
     if (s->l2[i].tab == nil) {
-      if (add) {
-	return getl2new(s, &s->l2[i], l1);
-      } else {
-	return nil;
-      }
+      return add ? getl2new(s, i, l1) : nil;
     } else if (s->l2[i].va == l1) {
       return &s->l2[i];
     }
