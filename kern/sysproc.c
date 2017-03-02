@@ -73,7 +73,7 @@ sysfork(void)
   addrspace = up->addrspace;
   do {
     r = addrspace->refs;
-  } while (!cas(&addrspace->refs, (void *) r, (void *) (r + 1)));
+  } while (cas(&addrspace->refs, (void *) r, (void *) (r + 1)) != OK);
 
   p = procnew(page, PAGE_SIZE,
 	      kstack, PAGE_SIZE,

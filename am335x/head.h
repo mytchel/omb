@@ -25,7 +25,8 @@
  *
  */
 
-#include "types.h"
+#include <types.h>
+#include <mach.h>
 #include "trap.h"
 
 #define USTACK_TOP	 0x20000000
@@ -35,17 +36,8 @@
 #define QUANTA_DEF       50
 #define QUANTA_MIN       10
 
-#define PAGE_SHIFT 	 12
-#define PAGE_SIZE	 (1UL << PAGE_SHIFT)
-#define PAGE_MASK	 (~(PAGE_SIZE - 1))
 #define PAGE_ALIGN(x)    (((x) + PAGE_SIZE - 1) & PAGE_MASK)
 #define PAGE_ALIGN_DN(x) (((x) - PAGE_SIZE + 1) & PAGE_MASK)
-
-struct label {
-  uint32_t psr, sp, lr;
-  uint32_t regs[13];
-  uint32_t pc;
-} __attribute__((__packed__));
 
 typedef enum {
   INTR_on  = (uint32_t) 0,

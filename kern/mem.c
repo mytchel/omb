@@ -34,7 +34,7 @@ heappop(void)
 
   do {
     p = up->heap;
-  } while (p != nil && !cas(&up->heap, p, p->next));
+  } while (p != nil && cas(&up->heap, p, p->next) != OK);
 
   return p;
 }
@@ -48,5 +48,54 @@ heapadd(void *start)
 
   do {
     p->next = up->heap;
-  } while (!cas(&up->heap, p->next, p));
+  } while (cas(&up->heap, p->next, p) != OK);
+}
+
+int
+checkflags(int need, int got)
+{
+  return OK;
+}
+
+void
+grantinit(struct grant *g, reg_t start)
+{
+  g->state = GRANT_EMPTY;
+  g->from = 0;
+  g->flags = 0;
+  g->npages = 0;
+  g->pages = (reg_t *) start;
+
+  g->maxnpages = PAGE_SIZE / sizeof(reg_t);
+}
+
+int
+granttake(struct grant *g)
+{
+  if (cas(&g->state, (void *) GRANT_EMPTY, (void *) GRANT_PART) != OK) {
+    procwlistadd(&g->waiting, up);
+    procsend();
+  }
+
+  return OK;
+}
+
+int
+granttakenb(struct grant *g)
+{
+  return cas(&g->state, (void *) GRANT_EMPTY, (void *) GRANT_PART);
+}
+
+int
+grantready(struct grant *g)
+{
+  g->state = GRANT_READY;
+  return OK;
+}
+
+int
+grantuntake(struct grant *g)
+{
+  g->state = GRANT_EMPTY;
+  return OK;
 }

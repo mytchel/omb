@@ -33,40 +33,6 @@ extern char initcode[];
 extern size_t initcodelen;
 
 static int
-messagetest(void)
-{
-  struct message m;
-  struct mtest *t;
-  int i;
-
-  m.type = 1;
-  t = (struct mtest *) m.body;
-
-  for (i = 0; i < 256; i++) {
-    memmove(t->buf, "Hello.", 7);
-    t->buf[0] = 'H' + i % 15;
-    
-    printf("%i sending message to 1 with type %i, and buf '%s'\n",
-	   up->pid, m.type, t->buf);
-   
-    if (ksend(1, &m) != OK) {
-      printf("ksend failed\n");
-      return ERR;
-    }
-
-    if (krecv(&m) != OK) {
-      printf("krecv failed\n");
-      return ERR;
-    }
-
-    printf("%i recieved message with type %i, from %i, with buf '%s'\n",
-	   up->pid, m.type, m.from, t->buf);
-  }
-
-  return OK;
-}
-
-static int
 mainprocfunc(void *arg)
 {
   struct label u;
@@ -74,15 +40,6 @@ mainprocfunc(void *arg)
   int r;
 
   printf("mainproc on pid %i\n", up->pid);
-  printf("message test\n");
-
-  if (messagetest() == OK) {
-    printf("\n\nmessage test: success!\n\n\n");
-  } else {
-    printf("\nmessage test: failed!\n\n\n\n");
-    while (true)
-      ;
-  }
 
   printf("load init code\n");
   
@@ -93,7 +50,7 @@ mainprocfunc(void *arg)
 
   for (o = 0; o < initcodelen; o += PAGE_SIZE) {
     printf("map from 0x%h to 0x%h\n", pa + o, va + o);
-    r = mappingadd(up->addrspace, va + o, pa + o, MEM_rw);
+    r = mappingadd(up->addrspace, va + o, pa + o, MEM_r|MEM_w|MEM_x);
     if (r != OK) {
       printf("error mapping 0x%h -> 0x%h for init!\n",
 	     va + o, pa + o);
@@ -116,7 +73,7 @@ mainprocfunc(void *arg)
 void
 mainprocinit(void)
 {
-  reg_t page, kstack, mbox, aspage;
+  reg_t page, kstack, mbox, grant, aspage;
   struct addrspace *addrspace;
   struct heappage *heap, *h;
   struct proc *p;
@@ -125,6 +82,7 @@ mainprocinit(void)
   page = getrampage();
   kstack = getrampage();
   mbox = getrampage();
+  grant = getrampage();
   aspage = getrampage();
 
   heap = nil;
@@ -136,7 +94,7 @@ mainprocinit(void)
  
   addrspace = addrspacenew(aspage);
 
-  p = procnew(page, kstack, mbox, heap, addrspace);
+  p = procnew(page, kstack, mbox, grant, heap, addrspace);
 
   forkfunc(p, &mainprocfunc, nil);
   procready(p);

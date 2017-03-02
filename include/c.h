@@ -40,7 +40,7 @@ fork(void);
 int
 getpid(void);
 
-bool
+int
 cas(void *addr, void *old, void *new);
 
 #define roundptr(x) (x % sizeof(void *) != 0 ?			 \
@@ -49,8 +49,5 @@ cas(void *addr, void *old, void *new);
 
 #define STATIC_ASSERT(COND, MSG) \
   typedef char static_assertion_##MSG[(COND)?1:-1]
-
-#define MEM_ro 0
-#define MEM_rw 1
 
 #endif

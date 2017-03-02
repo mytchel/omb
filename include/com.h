@@ -28,6 +28,7 @@
 #ifndef _COM_H_
 #define _COM_H_
 
+#define MESSAGESIZE 64
 #define MESSAGEBODY (64-sizeof(int)-sizeof(int))
 
 struct message {
@@ -35,6 +36,7 @@ struct message {
   int type;
   uint8_t body[MESSAGEBODY];
 };
+
 
 int
 sendnb(int to, struct message *m);
@@ -48,14 +50,39 @@ recvnb(struct message *m);
 int
 recv(struct message *m);
 
-#define MESSAGESIZE(m) \
-  STATIC_ASSERT(sizeof(struct m) <= MESSAGEBODY, \
+
+#define ASSERT_MESSAGE_SIZE(m) \
+  STATIC_ASSERT(sizeof(struct m) == MESSAGESIZE, \
 		too_big##m)
 
-struct mtest {
-  char buf[MESSAGEBODY];
+#define COM_MEMREQ   1
+struct memreq {
+  int from;
+  int type;
+  size_t len;
+  int flags;
+  reg_t pa;
+  uint8_t extra[MESSAGESIZE
+		- sizeof(int)
+		- sizeof(int)
+		- sizeof(size_t)
+		- sizeof(int)
+		- sizeof(reg_t)];
 };
 
-MESSAGESIZE(mtest);
+ASSERT_MESSAGE_SIZE(memreq);
+
+#define COM_MEMRESP   2
+struct memresp {
+  int from;
+  int type;
+  int ret;
+  uint8_t extra[MESSAGESIZE
+		- sizeof(int)
+		- sizeof(int)
+		- sizeof(int)];
+};
+
+ASSERT_MESSAGE_SIZE(memresp);
 
 #endif

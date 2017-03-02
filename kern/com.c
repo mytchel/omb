@@ -62,7 +62,7 @@ mboxaddmessage(struct mbox *mbox, struct message *m)
     return EFULL;
   }
 
-  if (!cas(&mbox->wtail, (void *) otail, (void *) ntail)) {
+  if (cas(&mbox->wtail, (void *) otail, (void *) ntail) != OK) {
     return ERR;
   }
   
@@ -71,10 +71,11 @@ mboxaddmessage(struct mbox *mbox, struct message *m)
   do {
     otail = mbox->rtail;
     ntail = (otail + 1) % mbox->len;
-  } while (!cas(&mbox->rtail, (void *) otail, (void *) ntail));
+  } while (cas(&mbox->rtail, (void *) otail, (void *) ntail) != OK);
 
   p = procwlistpop(&mbox->rwaiting);
   if (p != nil) {
+    printf("%i waking up %i for message\n", up->pid, p->pid);
     procready(p);
   }
   
@@ -136,7 +137,7 @@ mboxgetmessage(struct mbox *mbox, struct message *m)
     
   memmove(m, &mbox->messages[h], sizeof(struct message));
 
-  if (!cas(&mbox->head, (void *) h, (void *) n)) {
+  if (cas(&mbox->head, (void *) h, (void *) n) != OK) {
     return ERR;
   }
 
@@ -160,12 +161,15 @@ krecv(struct message *m)
   int r;
 
   while (true) {
+    printf("%i trying to get message\n", up->pid);
     r = mboxgetmessage(&up->mbox, m);
     if (r == EEMPTY) {
       if (procwlistadd(&up->mbox.rwaiting, up) == OK) {
+	printf("%i waiting for message\n", up->pid);
 	procrecv();
       }
     } else {
+      printf("got message, return\n");
       return r;
     }
   }

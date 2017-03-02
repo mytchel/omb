@@ -260,7 +260,7 @@ ustackcopy(struct ustack *n, struct ustack *o)
       return ENOMEM;
     }
 
-    if (mappingaddl2(n->tab, n->bottom, pn, MEM_rw) != OK) {
+    if (mappingaddl2(n->tab, n->bottom, pn, MEM_r|MEM_w) != OK) {
       heapadd((void *) pn);
       ustackfree(n);
       return ERR;
@@ -350,7 +350,7 @@ mappingaddl2(uint32_t *l2, reg_t va, reg_t pa, int flags)
 {
   uint32_t tex, ap, c, b;
 
-  if (flags & MEM_rw) {
+  if (flags & MEM_w) {
     ap = AP_RW_RW;
   } else {
     ap = AP_RW_RO;
@@ -381,7 +381,6 @@ mappingadd(struct addrspace *s,
 {
   struct l2 *l2;
 
-  printf("mapping add\n");
   l2 = getl2(s, L1X(va), true);
   if (l2 == nil) {
     return ERR;
@@ -409,45 +408,40 @@ mappingremove(struct addrspace *s,
   }
 }
 
-reg_t
-mappingfind(struct proc *p,
-	    reg_t va,
-	    int *flags)
+static reg_t
+pagefind(uint32_t *tab, reg_t va, int *flags)
 {
-  struct l2 *l2;
-  uint32_t *tab;
   reg_t entry;
   reg_t ap;
   int f;
 
-  if (p->ustack.top >= va && p->ustack.bottom <= va) {
-    tab = p->ustack.tab;
-  } else {
-    l2 = getl2(p->addrspace, L1X(va), false);
-    if (l2 != nil) {
-      tab = l2->tab;
-    } else {
-      tab = nil;
-    }
-  }
-
-  if (tab == nil) {
-    return nil;
-  }
- 
   entry = tab[L2X(va)];
 
   ap = entry & (3 << 4);
 
-  f = 0;
-  if (ap == AP_RW_RO) {
-    f |= MEM_ro;
-  } else {
-    f |= MEM_rw;
+  f = MEM_r;
+  if (ap != AP_RW_RW) {
+    f |= MEM_w;
   }
   
   *flags = f;
   return entry & PAGE_MASK;
+
+}
+
+reg_t
+mappingfind(struct addrspace *s,
+	    reg_t va,
+	    int *flags)
+{
+  struct l2 *l2;
+
+  l2 = getl2(s, L1X(va), false);
+  if (l2 != nil) {
+    return nil;
+  }
+
+  return pagefind(l2->tab, va, flags);
 }
 
 int
@@ -473,7 +467,7 @@ fixustack(struct ustack *s, reg_t addr)
 
   s->bottom = bottom;
   
-  return mappingaddl2(s->tab, s->bottom, new, MEM_rw);
+  return mappingaddl2(s->tab, s->bottom, new, MEM_r|MEM_w);
 }
 
 int
@@ -490,12 +484,6 @@ fixfault(reg_t addr)
 }
 
 int
-checkflags(int need, int got)
-{
-  return OK;
-}
-
-int
 validaddr(void *addr, size_t len, int flags)
 {
   reg_t off, va, l;
@@ -506,9 +494,15 @@ validaddr(void *addr, size_t len, int flags)
   off = ((reg_t) addr) - va;
   
   for (l = 0; l < len + off; l += PAGE_SIZE) {
-    if (mappingfind(up, va + l, &f) == nil) {
+    if (va + l >= up->ustack.bottom && va + l <= up->ustack.top) {
+      if (pagefind(up->ustack.tab, va + l, &f) == nil) {
+	return ERR;
+      }
+    } else if (mappingfind(up->addrspace, va + l, &f) == nil) {
       return ERR;
-    } else if (checkflags(flags, f) != OK) {
+    }
+
+    if (checkflags(flags, f) != OK) {
       return ERR;
     }
   }

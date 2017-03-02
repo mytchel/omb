@@ -4,7 +4,7 @@ SECTIONS
 {
 	.text ALIGN(4096) :
 	{
-		c.o(.text)
+		init/c.o(.text)
 		*(.text)
 		*(.text.*)
 		. = ALIGN(4096);

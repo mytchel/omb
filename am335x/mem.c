@@ -172,7 +172,7 @@ getrampage(void)
 
   do {
     p = rampages;
-  } while (!cas(&rampages, p, p->next));
+  } while (cas(&rampages, p, p->next) != OK);
 
   return p->pa;
 }

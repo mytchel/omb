@@ -32,7 +32,7 @@ syssendnb(int to, struct message *m)
 {
   printf("%i called sendnb\n", up->pid);
 
-  if (validaddr(m, sizeof(struct message), MEM_rw) != OK) {
+  if (validaddr(m, sizeof(struct message), MEM_r|MEM_w) != OK) {
     return ERR;
   }
   
@@ -44,7 +44,7 @@ syssend(int to, struct message *m)
 {
   printf("%i called send to %i, type %i\n", up->pid, to, m->type);
  
-  if (validaddr(m, sizeof(struct message), MEM_rw) != OK) {
+  if (validaddr(m, sizeof(struct message), MEM_r|MEM_w) != OK) {
     return ERR;
   }
 
@@ -56,7 +56,7 @@ sysrecvnb(struct message *m)
 {
   printf("%i called recvnb\n", up->pid);
  
-  if (validaddr(m, sizeof(struct message), MEM_rw) != OK) {
+  if (validaddr(m, sizeof(struct message), MEM_r|MEM_w) != OK) {
     return ERR;
   }
 
@@ -68,9 +68,12 @@ sysrecv(struct message *m)
 {
   printf("%i called recv\n", up->pid);
  
-  if (validaddr(m, sizeof(struct message), MEM_rw) != OK) {
+  if (validaddr(m, sizeof(struct message), MEM_r|MEM_w) != OK) {
     return ERR;
   }
 
-  return krecv(m);
+  int r;
+  r = krecv(m);
+  printf("%i got message, return to user\n", up->pid);
+  return r;
 }

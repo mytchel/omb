@@ -25,47 +25,20 @@
  *
  */
 
-#include <head.h>
+#ifndef _MEM_H_
+#define _MEM_H_
 
-reg_t
-sysexit(void);
+#define MEM_r    1<<0
+#define MEM_w    1<<1
+#define MEM_x    1<<2
 
-reg_t
-sysfork(int flags);
+int
+mgrant(int to, int flags, void *start, size_t len);
 
-reg_t
-sysgetpid(void);
+int
+mgrantnb(int to, int flags, void *start, size_t len);
 
-reg_t
-syssendnb(int to, struct message *m);
+int
+mmap(int flags, void *start, size_t len);
 
-reg_t
-syssend(int to, struct message *m);
-
-reg_t
-sysrecvnb(struct message *m);
-
-reg_t
-sysrecv(struct message *m);
-
-reg_t
-sysmgrantnb(int to, int flags, void *start, size_t len);
-
-reg_t
-sysmgrant(int to, int flags, void *start, size_t len);
-
-reg_t
-sysmmap(int flags, void *start, size_t len);
-
-void *systab[NSYSCALLS] = {
-  [SYSCALL_EXIT]              = (void *) &sysexit,
-  [SYSCALL_FORK]              = (void *) &sysfork,
-  [SYSCALL_GETPID]            = (void *) &sysgetpid,
-  [SYSCALL_SENDNB]            = (void *) &syssendnb,
-  [SYSCALL_SEND]              = (void *) &syssend,
-  [SYSCALL_RECVNB]            = (void *) &sysrecvnb,
-  [SYSCALL_RECV]              = (void *) &sysrecv,
-  [SYSCALL_MGRANTNB]          = (void *) &sysmgrant,
-  [SYSCALL_MGRANT]            = (void *) &sysmgrantnb,
-  [SYSCALL_MMAP]              = (void *) &sysmmap,
-};
+#endif

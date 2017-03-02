@@ -24,6 +24,7 @@
 #
 
 #include "trap.h"
+#include "err.h"
 
 .section .text
 
@@ -162,18 +163,18 @@ mmudisable:
 	mov pc, lr
 
 	
-@bool
+@int
 @cas(void *addr, void *old, void *new);
 cas:
 	ldrex r3, [r0]
 	cmp r3, r1
-	movne r0, #0
+	movne r0, #ERR
 	movne pc, lr
 	
 	strex r3, r2, [r0]
 	cmp r3, #1
-	moveq r0, #0
-	movne r0, #1
+	moveq r0, #ERR
+	movne r0, #OK
 	
 	mov pc, lr
 

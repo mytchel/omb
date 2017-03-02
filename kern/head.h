@@ -28,11 +28,32 @@
 #include <c.h>
 #include <syscalls.h>
 #include <com.h>
+#include <mem.h>
 #include <stdarg.h>
 #include <string.h>
 
+
+#define ASSERT_PAGE_SIZE(m)				 \
+  STATIC_ASSERT(sizeof(struct m) <= PAGE_SIZE, \
+		too_big##m)
+
 struct heappage {
   struct heappage *next;
+};
+
+ASSERT_PAGE_SIZE(heappage);
+
+struct grant {
+  #define GRANT_EMPTY  1
+  #define GRANT_PART   2
+  #define GRANT_READY  3
+  int state;
+  struct proc *waiting;
+  
+  int from;
+  int flags;
+  size_t npages, maxnpages;
+  reg_t *pages;
 };
 
 struct mbox {
@@ -66,12 +87,17 @@ struct proc {
   struct addrspace *addrspace;
   struct ustack ustack;
   struct mbox mbox;
+  struct grant grant;
 };
+
+ASSERT_PAGE_SIZE(proc);
+
 
 struct proc *
 procnew(reg_t page,
 	reg_t kstack,
 	reg_t mbox,
+	reg_t grant,
 	struct heappage *heap,
 	struct addrspace *addrspace);
 
@@ -181,12 +207,27 @@ mappingremove(struct addrspace *s,
 	      reg_t va);
 
 reg_t
-mappingfind(struct proc *p,
+mappingfind(struct addrspace *s,
 	    reg_t va,
 	    int *flags);
 
 int
 checkflags(int need, int got);
+
+void
+grantinit(struct grant *g, reg_t start);
+
+int
+granttake(struct grant *g);
+
+int
+granttakenb(struct grant *g);
+
+int
+grantuntake(struct grant *g);
+
+int
+grantready(struct grant *g);
 
 void
 mmuswitch(struct proc *p);

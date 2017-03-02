@@ -25,47 +25,40 @@
  *
  */
 
-#include <head.h>
+#include <c.h>
+#include <com.h>
+#include <mem.h>
 
-reg_t
-sysexit(void);
+int
+main(void)
+{
+  struct memresp resp;
+  struct memreq req;
 
-reg_t
-sysfork(int flags);
+  req.type = COM_MEMREQ;
+  req.len = 0x4000;
+  req.flags = MEM_r|MEM_w;
+  req.pa = 0;
 
-reg_t
-sysgetpid(void);
+  send(1, (struct message *) &req);
 
-reg_t
-syssendnb(int to, struct message *m);
+  while (true) {
+    if (recv((struct message *) &resp) == OK) {
+      if (resp.type == COM_MEMRESP) {
+	break;
+      }
+    } else {
+      return ERR;
+    }
+  }  
 
-reg_t
-syssend(int to, struct message *m);
+  if (mmap(MEM_r|MEM_w, (void *) 0x8000, 0x4000) != OK) {
+    return ERR;
+  }
 
-reg_t
-sysrecvnb(struct message *m);
+  while (true)
+    ;
+       
+  return OK;
+}
 
-reg_t
-sysrecv(struct message *m);
-
-reg_t
-sysmgrantnb(int to, int flags, void *start, size_t len);
-
-reg_t
-sysmgrant(int to, int flags, void *start, size_t len);
-
-reg_t
-sysmmap(int flags, void *start, size_t len);
-
-void *systab[NSYSCALLS] = {
-  [SYSCALL_EXIT]              = (void *) &sysexit,
-  [SYSCALL_FORK]              = (void *) &sysfork,
-  [SYSCALL_GETPID]            = (void *) &sysgetpid,
-  [SYSCALL_SENDNB]            = (void *) &syssendnb,
-  [SYSCALL_SEND]              = (void *) &syssend,
-  [SYSCALL_RECVNB]            = (void *) &sysrecvnb,
-  [SYSCALL_RECV]              = (void *) &sysrecv,
-  [SYSCALL_MGRANTNB]          = (void *) &sysmgrant,
-  [SYSCALL_MGRANT]            = (void *) &sysmgrantnb,
-  [SYSCALL_MMAP]              = (void *) &sysmmap,
-};

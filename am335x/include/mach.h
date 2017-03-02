@@ -25,32 +25,17 @@
  *
  */
 
-#include <c.h>
-#include <com.h>
+#ifndef _MACH_H
+#define _MACH_H
 
-int
-main(void)
-{
-  struct message m;
-  struct mtest *t;
-  int i;
+#define PAGE_SHIFT 	 12
+#define PAGE_SIZE	 (1UL << PAGE_SHIFT)
+#define PAGE_MASK	 (~(PAGE_SIZE - 1))
 
-  t = (struct mtest *) m.body;
-  
-  for (i = 0; i < 10; i++) {
-    m.type = 1;
+struct label {
+  uint32_t psr, sp, lr;
+  uint32_t regs[13];
+  uint32_t pc;
+} __attribute__((__packed__));
 
-    t->buf[0] = 'H' + i;
-    t->buf[1] = 'm';
-    t->buf[2] = 'm';
-    t->buf[3] = 0;
-
-    send(1, &m);
-  }
-
-  while (true)
-    ;
-       
-  return OK;
-}
-
+#endif

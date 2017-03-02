@@ -54,10 +54,10 @@ CLEAN += am335x.umg am335x.list init.list
 
 
 ISRC_A := \
-	c.S
+	init/c.S
 
 ISRC_C := \
-	init.c
+	init/init.c
 
 IOBJECTS := \
 	$(ISRC_A:%.S=%.o) \
@@ -89,6 +89,7 @@ KSRC_C := \
         ../kern/systab.c        \
         ../kern/sysproc.c       \
         ../kern/syscom.c        \
+        ../kern/sysmap.c        \
         ../kern/string.c        \
         ../kern/printf.c        \
         ../kern/proc.c          \
@@ -118,9 +119,9 @@ CLEAN += $(KOBJECTS)
 	$(OBJDUMP) -S $< > $@
 
 
-init.elf: init.ld $(IOBJECTS)
+init.elf: init/init.ld $(IOBJECTS)
 	$(LD) $(LDFLAGS) \
-		-T init.ld -Ttext 0x1000 \
+		-T init/init.ld -Ttext 0x1000 \
 		-o $@ $(IOBJECTS) -lgcc
 
 

@@ -24,6 +24,7 @@
 #
 
 #include <syscalls.h>
+#include <err.h>
 
 .section .text
 
@@ -37,6 +38,9 @@
 .global send
 .global recvnb
 .global recv
+.global mgrant
+.global mgrantnb
+.global mmap
 
 @ Useful assembly functions
 .global cas
@@ -93,19 +97,40 @@ recv:
 	svc 0
 	pop {r12, pc}
 
+
+mgrant:
+	push {r12, lr}
+	mov r12, #SYSCALL_MGRANT
+	svc 0
+	pop {r12, pc}
+
+	
+mgrantnb:
+	push {r12, lr}
+	mov r12, #SYSCALL_MGRANTNB
+	svc 0
+	pop {r12, pc}
+
+	
+mmap:
+	push {r12, lr}
+	mov r12, #SYSCALL_MMAP
+	svc 0
+	pop {r12, pc}
+
 	
 @bool
 @cas(void *addr, void *old, void *new);
 cas:
 	ldrex r3, [r0]
 	cmp r3, r1
-	movne r0, #0
+	movne r0, #ERR
 	movne pc, lr
 	
 	strex r3, r2, [r0]
 	cmp r3, #1
-	moveq r0, #0
-	movne r0, #1
+	moveq r0, #ERR
+	movne r0, #OK
 	
 	mov pc, lr
 

@@ -24,6 +24,7 @@
 #
 
 #include "trap.h"
+#include <syscalls.h>
 
 .section .text
 
@@ -86,6 +87,9 @@ vectortable:
 
 
 swi_ex:
+	cmp r12, #NSYSCALLS
+	movpls pc, lr
+	
 	stmfd sp!, {r9, r10, r11, lr}
 
 	mrs r9, spsr
@@ -96,8 +100,6 @@ swi_ex:
 	mov r11, lr
 	
 	cpsie if, #MODE_SVC
-
-@ TODO: add check that r12 is valid
 	
 	ldr lr, =systab
 	add r12, lr, r12, lsl #2

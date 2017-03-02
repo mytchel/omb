@@ -93,10 +93,10 @@ addtolistback(struct proc **l, struct proc *p)
       ;
 
     if (pp == nil) {
-      if (cas(l, nil, p)) {
+      if (cas(l, nil, p) == OK) {
 	break;
       }
-    } else if (cas(&pp->snext, nil, p)) {
+    } else if (cas(&pp->snext, nil, p) == OK) {
       break;
     }
   }
@@ -118,7 +118,7 @@ removefromlist(struct proc **l, struct proc *p)
 
       if (pt == nil) {
 	return false;
-      } else if (cas(&pt->snext, p, p->snext)) {
+      } else if (cas(&pt->snext, p, p->snext) == OK) {
 	return true;
       }
     }
@@ -126,7 +126,7 @@ removefromlist(struct proc **l, struct proc *p)
 }
 	
 struct proc *
-procnew(reg_t page, reg_t kstack, reg_t mbox,
+procnew(reg_t page, reg_t kstack, reg_t mbox, reg_t grant,
 	struct heappage *heap,
 	struct addrspace *addrspace)
 {
@@ -140,6 +140,7 @@ procnew(reg_t page, reg_t kstack, reg_t mbox,
 
   mboxinit(&p->mbox, mbox);
   ustackinit(&p->ustack);
+  grantinit(&p->grant, grant);
 
   p->addrspace = addrspace;
 
@@ -152,17 +153,17 @@ procnew(reg_t page, reg_t kstack, reg_t mbox,
   do {
     code = nextcode;
     ncode = ((code + 13) * 3) & 0xffff;
-  } while (!cas(&nextcode, (void *) code, (void *) ncode));
+  } while (cas(&nextcode, (void *) code, (void *) ncode) != OK);
 
   /* Put proc in the procs table, and set pid. */
   do {
     do {
       pos = nextpos % PROCSMAX;
-    } while (!cas(&nextpos, (void *) pos, (void *) (pos + 1)));
+    } while (cas(&nextpos, (void *) pos, (void *) (pos + 1)) != OK);
 
     p->pid = (pos << 16) | code;
  
-  } while (!cas(&procs[pos], nil, p));
+  } while (cas(&procs[pos], nil, p) != OK);
 
   return p;
 }
@@ -183,7 +184,7 @@ procexit(struct proc *p)
 
   do {
     space = p->addrspace;
-  } while (!cas(&p->addrspace, space, nil));
+  } while (cas(&p->addrspace, space, nil) != OK);
 
   if (space != nil) {
     addrspacefree(space);
@@ -193,7 +194,7 @@ procexit(struct proc *p)
 
   /* TODO: free kstack and proc page */
 
-  while (!cas(&procs[p->pid >> 16], p, nil))
+  while (cas(&procs[p->pid >> 16], p, nil) != OK)
     ;
 
   i = setintr(INTR_off);
@@ -284,11 +285,7 @@ procwlistadd(struct proc **pp, struct proc *p)
 
   p->wnext = nil;
 
-  if (cas(pp, nil, p)) {
-    return OK;
-  } else {
-    return ERR;
-  }
+  return cas(pp, nil, p);
 }
 
 struct proc *
@@ -298,7 +295,7 @@ procwlistpop(struct proc **pp)
 
   do {
     p = *pp;
-  } while (p != nil && !cas(pp, p, p->wnext));
+  } while (p != nil && cas(pp, p, p->wnext) != OK);
 
   return p;
 }

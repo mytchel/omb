@@ -29,29 +29,88 @@
 #include "fns.h"
 
 static int
+getrampages(struct grant *g, size_t len)
+{
+  size_t i;
+  
+  g->npages = len / PAGE_SIZE;
+  if (g->npages >= g->maxnpages) {
+    return ERR;
+  }
+
+  for (i = 0; i < g->npages; i++) {
+    g->pages[i] = getrampage();
+  }
+
+  return OK;
+}
+
+static int
+handlereq(struct memreq *req)
+{
+  struct memresp resp;
+  struct grant *g;
+  struct proc *p;
+
+  resp.type = COM_MEMRESP;
+  
+  printf("memproc got memreq from %i wanting %i bytes, with flags %i, pa 0x%h\n",
+	 req->from, req->len, req->flags, req->pa);
+
+  p = findproc(req->from);
+  if (p == nil) {
+    return ERR;
+  }
+
+  g = &p->grant;
+  if (granttake(g) != OK) {
+    printf("failed to take grant\n");
+    resp.ret = ERR;
+    return ksend(req->from, (struct message *) &resp);
+  }
+
+  g->from = up->pid;
+  g->flags = req->flags;
+
+  if (req->pa == nil) {
+    /* random ram page */
+    printf("get ram pages\n");
+    resp.ret = getrampages(g, req->len);
+    if (resp.ret == OK) {
+      printf("make grant ready\n");
+      grantready(g);
+    } else {
+      printf("failed\n");
+      if (grantuntake(g) != OK) {
+	printf("memproc failed to untake grant after failing to get pages!\n");
+      }
+      
+      return ksend(req->from, (struct message *) &resp);
+    }
+  } else {
+    /* specific pages */
+    resp.ret = ERR;
+  }
+  
+
+  printf("send response to %i\n", req->from);
+  return ksend(req->from, (struct message *) &resp);
+}
+
+static int
 memprocfunc(void *arg)
 {
   struct message m;
-  struct mtest *t;
-  int from;
 
   printf("memproc on pid %i\n", up->pid);
   
   while (true) {
     if (krecv(&m) == OK) {
       printf("memproc got message from %i of type %i\n", m.from, m.type);
-      if (m.type == 1) {
-	t = (struct mtest *) m.body;
-
-	m.type = 1;
-	printf("memproc got message from %i saying '%s'\n",
-	       m.from, t->buf);
-
-	from = m.from;
-
-	memmove(t->buf, "Hello", 6);
-
-	ksend(from, &m);
+      if (m.type == COM_MEMREQ) {
+	if (handlereq((struct memreq *) &m) != OK) {
+	  printf("error handling request!\n");
+	}
       }
     }
   }
@@ -62,7 +121,7 @@ memprocfunc(void *arg)
 void
 memprocinit(void)
 {
-  reg_t page, kstack, mbox;
+  reg_t page, kstack, mbox, grant;
   struct heappage *heap, *h;
   struct proc *p;
   size_t hsize;
@@ -70,6 +129,7 @@ memprocinit(void)
   page = getrampage();
   kstack = getrampage();
   mbox = getrampage();
+  grant = getrampage();
 
   heap = nil;
   for (hsize = 0; hsize < 1024 * 64; hsize += PAGE_SIZE) {
@@ -78,7 +138,7 @@ memprocinit(void)
     heap = h;
   }
   
-  p = procnew(page, kstack, mbox, heap, nil);
+  p = procnew(page, kstack, mbox, grant, heap, nil);
 
   forkfunc(p, &memprocfunc, nil);
   procready(p);
