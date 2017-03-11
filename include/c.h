@@ -34,11 +34,24 @@
 int
 exit(void) __attribute__((noreturn));
 
+/* proc      -> A page of ram for the process table entry.
+ * kheap     -> Start of ram for the processes kernel heap.
+ * hlen      -> Length of new kernel heap.
+ * start     -> Start of the new processes virtual address space.
+ *             This will be unmapped from the callers address space.
+ * len       -> Length of address space given to new process.
+ * offset    -> Where start should be mapped in the new address space.
+ * entry     -> Start executing here.
+ * ustacktop -> Initial user stack.
+ * arg       -> Argument given to new process.
+ */
+
 int
-fork(void *page, void *kstack,
-     void *ustacktop,
-     void *mbox, void *grant,
-     void *kheap, size_t hsize);
+fork(void *proc, void *kstack,
+     void *kheap, size_t hlen,
+     void *start, size_t len, void *offset,
+     void *entry, void *ustacktop,
+     void *arg);
 
 int
 getpid(void);

@@ -85,4 +85,6 @@ struct memresp {
 
 ASSERT_MESSAGE_SIZE(memresp);
 
+#define COM_TEST   3
+
 #endif

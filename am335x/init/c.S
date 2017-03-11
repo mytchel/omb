@@ -62,7 +62,9 @@ fork:
 	add r3, sp, #(4 * 2)
 	mov r12, #SYSCALL_FORK
 	svc 0
-	pop {r12, pc}
+	pop {r12, lr}
+	pop {r3}
+	mov pc, lr
 
 	
 getpid:

@@ -32,6 +32,8 @@
 #define MEM_w    1<<1
 #define MEM_x    1<<2
 
+#define GRANTSMALLPAGES 16
+
 int
 mgrant(int to, int flags, void *start, size_t len);
 

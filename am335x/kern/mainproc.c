@@ -85,7 +85,7 @@ mainprocfunc(void *arg)
 void
 mainprocinit(void)
 {
-  reg_t page, kstack, mbox, grant, aspage;
+  reg_t page, kstack, aspage;
   struct heappage *heap, *h;
   struct space *space;
   struct proc *p;
@@ -93,8 +93,6 @@ mainprocinit(void)
   
   page = getrampage();
   kstack = getrampage();
-  mbox = getrampage();
-  grant = getrampage();
   aspage = getrampage();
 
   heap = nil;
@@ -106,7 +104,7 @@ mainprocinit(void)
  
   space = spacenew(aspage);
 
-  p = procnew(page, kstack, mbox, grant, heap, space);
+  p = procnew(page, kstack, heap, space);
 
   forkfunc(p, &mainprocfunc, nil);
   procready(p);

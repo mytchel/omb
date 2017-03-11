@@ -44,24 +44,18 @@ forkfunc(struct proc *p, int (*func)(void *), void *arg)
   memmove((void *) p->label.sp, &arg, sizeof(uint32_t));
 }
 
-reg_t
-forkchild(struct proc *p)
+void
+forkchild(struct proc *p, void *entry, void *ustacktop, void *arg)
 {
-  uint32_t s, d;
+  struct label *l;
 
-  if (setlabel(&p->label)) {
-    return 0;
-  }
-
-  s = p->label.sp;
-  d = up->kstack + PAGE_SIZE - s;
-
-  p->label.sp = p->kstack + PAGE_SIZE - d;
+  l = &p->label;
   
-  memmove((void *) p->label.sp, (void *) s, d);
+  memset(l, 0, sizeof(struct label));
 
-  procready(p);
-
-  return p->pid;
+  l->psr = (uint32_t) MODE_USR;
+  l->sp = (uint32_t) ustacktop;
+  l->regs[0] = (uint32_t) arg;
+  l->pc = (uint32_t) entry;
 }
 

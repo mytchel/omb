@@ -62,12 +62,25 @@ main(void)
 {
   struct message m;
   int f;
+
+  m.type = COM_TEST;
+  for (f = 0; f < 10; f++) {
+    if (send(1, &m) != OK) {
+      return ERR;
+    }
+
+    recv(&m);
+  }
   
-  if (getmem((void *) 0x4000, 0x8000) != OK) {
+  if (getmem((void *) 0x4000, 0x2000) != OK) {
     return ERR;
   }
 
   if (getmem((void *) 0x20000, 0x4000) != OK) {
+    return ERR;
+  }
+
+  if (getmem((void *) 0x30000, 0x1000) != OK) {
     return ERR;
   }
 
@@ -76,15 +89,13 @@ main(void)
   }
   
   f = fork((void *) 0x4000, (void *) 0x5000,
-	   (void *) 0x10000000,
-	   (void *) 0x6000, (void *) 0x7000,
-	   (void *) 0x20000, 0x4000);
+	   (void *) 0x20000, 0x4000,
+	   (void *) 0x30000, 0x1000,
+	   (void *) 0x1000, (void *) 0x1000,
+	   (void *) 0x20000000, (void *) 1234);
 
   if (f < 0) {
     return ERR;
-  } else if (f == 0) {
-    while (recv(&m) == OK)
-      ;
   } else {
     m.type = 4;
     while (send(f, &m) == OK)

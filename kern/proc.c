@@ -128,7 +128,7 @@ removefromlist(struct proc **l, struct proc *p)
 }
 	
 struct proc *
-procnew(reg_t page, reg_t kstack, reg_t mbox, reg_t grant,
+procnew(reg_t page, reg_t kstack, 
 	struct heappage *heap,
 	struct space *space)
 {
@@ -140,8 +140,8 @@ procnew(reg_t page, reg_t kstack, reg_t mbox, reg_t grant,
   p->kstack = kstack;
   p->heap = heap;
 
-  mboxinit(&p->mbox, mbox);
-  grantinit(&p->grant, grant);
+  mboxinit(&p->mbox);
+  grantinit(&p->grant);
 
   p->space = space;
 

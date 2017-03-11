@@ -28,7 +28,7 @@
 #include <head.h>
 
 void
-mboxinit(struct mbox *m, reg_t start)
+mboxinit(struct mbox *m)
 {
   m->swaiting = nil;
   m->rwaiting = nil;
@@ -37,9 +37,7 @@ mboxinit(struct mbox *m, reg_t start)
   m->rtail = 0;
   m->wtail = 0;
 
-  m->messages = (struct message *) start;
-  m->len = PAGE_SIZE / sizeof(struct message);
-
+  m->len = MBOXSIZE;
   memset(m->messages, 0, m->len * sizeof(struct message));
 }
 
@@ -47,16 +45,9 @@ void
 mboxclose(struct mbox *m)
 {
   struct proc *p;
-  void *messages;
   
   m->len = 0;
   m->head = m->rtail = m->wtail = 0;
-
-  do {
-    messages = m->messages;
-  } while (cas(&m->messages, messages, nil));
-  
-  heapadd(messages);
 
   while ((p = procwlistpop(&m->swaiting)) != nil) {
     procready(p);
@@ -72,7 +63,7 @@ mboxaddmessage(struct mbox *mbox, struct message *m)
 {
   size_t otail, ntail;
   struct proc *p;
-  
+
   otail = mbox->wtail;
   ntail = (otail + 1) % mbox->len;
 
@@ -95,7 +86,7 @@ mboxaddmessage(struct mbox *mbox, struct message *m)
   if (p != nil) {
     procready(p);
   }
-  
+ 
   return OK;
 }
 

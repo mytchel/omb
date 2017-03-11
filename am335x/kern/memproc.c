@@ -34,7 +34,7 @@ getrampages(struct grant *g, size_t len)
   size_t i;
   
   g->npages = len / PAGE_SIZE;
-  if (g->npages >= g->maxnpages) {
+  if (g->npages >= GRANTSMALLPAGES) {
     return ERR;
   }
 
@@ -55,7 +55,7 @@ getiopages(struct grant *g, reg_t pa, size_t len)
   size_t i;
   
   g->npages = len / PAGE_SIZE;
-  if (g->npages >= g->maxnpages) {
+  if (g->npages >= GRANTSMALLPAGES) {
     return ERR;
   }
 
@@ -125,10 +125,17 @@ memprocfunc(void *arg)
   
   while (true) {
     if (krecv(&m) == OK) {
-      if (m.type == COM_MEMREQ) {
+      switch (m.type) {
+      case COM_MEMREQ:
 	if (handlereq((struct memreq *) &m) != OK) {
 	  printf("error handling request!\n");
 	}
+	break;
+      case COM_TEST:
+	printf("memproc com test with %i\n", m.from);
+	ksend(m.from, &m);
+      default:
+	break;
       }
     }
   }
@@ -139,15 +146,13 @@ memprocfunc(void *arg)
 void
 memprocinit(void)
 {
-  reg_t page, kstack, mbox, grant;
+  reg_t page, kstack;
   struct heappage *heap, *h;
   struct proc *p;
   size_t hsize;
 
   page = getrampage();
   kstack = getrampage();
-  mbox = getrampage();
-  grant = getrampage();
 
   heap = nil;
   for (hsize = 0; hsize < 1024 * 64; hsize += PAGE_SIZE) {
@@ -156,7 +161,7 @@ memprocinit(void)
     heap = h;
   }
   
-  p = procnew(page, kstack, mbox, grant, heap, nil);
+  p = procnew(page, kstack, heap, nil);
 
   forkfunc(p, &memprocfunc, nil);
   procready(p);

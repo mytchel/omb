@@ -58,21 +58,18 @@ checkflags(int need, int got)
 }
 
 void
-grantinit(struct grant *g, reg_t start)
+grantinit(struct grant *g)
 {
   g->state = GRANT_EMPTY;
   g->from = 0;
   g->flags = 0;
   g->npages = 0;
-  g->pages = (reg_t *) start;
-
-  g->maxnpages = PAGE_SIZE / sizeof(reg_t);
 }
 
 void
 grantfree(struct grant *g)
 {
-  heapadd(g->pages);
+
 }
 
 int

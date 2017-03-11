@@ -33,7 +33,7 @@
 #include <string.h>
 
 
-#define ASSERT_PAGE_SIZE(m)				 \
+#define ASSERT_PAGE_SIZE(m) \
   STATIC_ASSERT(sizeof(struct m) <= PAGE_SIZE, \
 		too_big##m)
 
@@ -52,15 +52,16 @@ struct grant {
   
   int from;
   int flags;
-  size_t npages, maxnpages;
-  reg_t *pages;
+  size_t npages;
+  reg_t pages[GRANTSMALLPAGES];
 };
 
+#define MBOXSIZE 4
+
 struct mbox {
-  size_t head, rtail, wtail;
+  size_t len, head, rtail, wtail;
   struct proc *swaiting, *rwaiting;
-  size_t len;
-  struct message *messages;
+  struct message messages[MBOXSIZE];
 };
 
 typedef enum {
@@ -83,20 +84,18 @@ struct proc {
 
   reg_t kstack;
 
-  struct heappage *heap;
-  struct space *space;
   struct mbox mbox;
   struct grant grant;
+
+  struct space *space;
+  struct heappage *heap;
 };
 
 ASSERT_PAGE_SIZE(proc);
 
-
 struct proc *
 procnew(reg_t page,
 	reg_t kstack,
-	reg_t mbox,
-	reg_t grant,
 	struct heappage *heap,
 	struct space *space);
 
@@ -144,17 +143,17 @@ droptouser(struct label *u, reg_t ksp)
 void
 forkfunc(struct proc *p, int (*func)(void *), void *arg);
 
-reg_t
-forkchild(struct proc *p);
+void
+forkchild(struct proc *p, void *entry, void *ustacktop, void *arg);
 
 void *
 heappop(void);
 
 void
-heapadd(void *start);
+heapadd(void *page);
 
 void
-mboxinit(struct mbox *mbox, reg_t start);
+mboxinit(struct mbox *mbox);
 
 void
 mboxclose(struct mbox *m);
@@ -172,7 +171,7 @@ int
 krecv(struct message *m);
 
 struct space *
-spacenew(reg_t start);
+spacenew(reg_t page);
 
 void
 spacefree(struct space *s);
@@ -199,7 +198,7 @@ int
 checkflags(int need, int got);
 
 void
-grantinit(struct grant *g, reg_t start);
+grantinit(struct grant *g);
 
 void
 grantfree(struct grant *g);
