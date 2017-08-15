@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2017 Mytchel Hammond <mytchel@openmailbox.org>
+ * Copyright (c) 2017 Mytchel Hammond <mytch@lackname.org>
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -25,8 +25,8 @@
  *
  */
 
-#ifndef _FNS_H_
-#define _FNS_H_
+#ifndef _FNS_H
+#define _FNS_H
 
 #define readl(a)	(*(volatile uint32_t*)(a))
 #define readw(a)	(*(volatile uint16_t*)(a))
@@ -41,78 +41,49 @@
 #define AP_RW_RO	2
 #define AP_RW_RW	3
 
-void
-funcloader(void);
-
 uint32_t
-fsrstatus(void);
+fsr_status(void);
 
 reg_t
-faultaddr(void);
+fault_addr(void);
 
 void
-intcaddhandler(uint32_t, void (*)(uint32_t));
+intc_add_handler(uint32_t, void (*)(uint32_t));
 
 void
-intcreset(void);
+intc_reset(void);
 
 void
-cachedisable(void);
+mmu_invalidate(void);
 
 void
-cacheenable(void);
+mmu_enable(void);
 
 void
-cacheflush(void);
-
-void
-cacheclean(void);
-
-void
-mmuinvalidate(void);
-
-void
-mmuenable(void);
-
-void
-mmudisable(void);
+mmu_disable(void);
 
 void
 imap(void *, void *, int, bool);
-	
-void
-mmuempty1(void);
 
 void
-mmuloadttb(uint32_t *);
+mmu_load_ttb(uint32_t *);
 
 /* Initialisation functions */
 
 void
-intcinit(void);
+init_intc(void);
 
 void
-memoryinit(void);
+init_memory(void);
 
 void
-mmuinit(void);
+init_watchdog(void);
 
 void
-watchdoginit(void);
+init_timers(void);
 
 void
-timersinit(void);
-
-void
-memprocinit(void);
-
-void
-mainprocinit(void);
-
-reg_t
-getrampage(void);
-
-reg_t
-getiopage(reg_t);
+init_proc0(void);
 
 #endif
+

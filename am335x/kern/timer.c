@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2017 Mytchel Hammond <mytchel@openmailbox.org>
+ * Copyright (c) 2017 Mytchel Hammond <mytch@lackname.org>
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -29,84 +29,134 @@
 #include "fns.h"
 
 #define TIMER2 0x48040000
-
 #define TINT2 68
 
-#define TIMER_IRQSTATUS		0x28
-#define TIMER_IRQENABLE_SET	0x2c
-#define TIMER_IRQENABlE_CLR	0x30
-#define TIMER_TCLR		0x38
-#define TIMER_TCRR		0x3c
-#define TIMER_TMAR		0x4c
-#define TIMER_TWPS		0x48
-
 #define CM_DPLL	0x44E00500
-#define CLK_SEL0 0x08
-#define CLK_SEL1 0x08
-#define CLK_SEL2 0x08
 
-#define WDT_1 0x44E35000
+#define WDT 0x44E35000
 
-#define WDT_WSPR	0x48
-#define WDT_WWPS	0x34
+struct timer {
+	uint32_t tidr;
+	uint32_t pad1[3];
+	uint32_t tiocp_cfg;
+	uint32_t pad2[3];
+	uint32_t irq_eoi;
+	uint32_t irqstatus_raw;
+	uint32_t irqstatus;
+	uint32_t irqenable_set;
+	uint32_t irqenable_clr;
+	uint32_t irqwakeen;
+	uint32_t tclr;
+	uint32_t tcrr;
+	uint32_t tldr;
+	uint32_t ttgr;
+	uint32_t twps;
+	uint32_t tmar;
+	uint32_t tcar1;
+	uint32_t tsicr;
+	uint32_t tcar2;
+};
 
-static void systickhandler(uint32_t);
+struct cm_dpll {
+	uint32_t pad1[1];
+	uint32_t timer7_clk;
+	uint32_t timer2_clk;
+	uint32_t timer3_clk;
+	uint32_t timer4_clk;
+	uint32_t mac_clksel;
+	uint32_t timer5_clk;
+	uint32_t timer6_clk;
+	uint32_t cpts_rtf_clksel;
+	uint32_t timer1ms_clk;
+	uint32_t gfx_fclk;
+	uint32_t pru_icss_ocp_clk;
+	uint32_t lcdc_pixel_clk;
+	uint32_t wdt1_clk;
+	uint32_t gpio0_bdclk;
+};
+
+struct watchdog {
+	uint32_t widr;
+	uint32_t pad1[3];
+	uint32_t wdsc;
+	uint32_t wdst;
+	uint32_t wisr;
+	uint32_t wier;
+	uint32_t pad2[1];
+	uint32_t wclr;
+	uint32_t wcrr;
+	uint32_t wldr;
+	uint32_t wtgr;
+	uint32_t wwps;
+	uint32_t pad3[3];
+	uint32_t wdly;
+	uint32_t wspr;
+	uint32_t pad4[2];
+	uint32_t wirqstatraw;
+	uint32_t wirqstat;
+	uint32_t wirqenset;
+	uint32_t wireqenclr;
+};
+
+struct timer *timer2 = (struct timer *) TIMER2;
+struct cm_dpll *cm = (struct cm_dpll *) CM_DPLL; 
+struct watchdog *wdt = (struct watchdog *) WDT;
+
+static void systick_handler(uint32_t);
 
 void
-watchdoginit(void)
+init_watchdog(void)
 {
   /* Disable watchdog timer. */
 
-  writel(0x0000AAAA, WDT_1 + WDT_WSPR);
-  while (readl(WDT_1 + WDT_WWPS) & (1<<4))
+	wdt->wspr = 0x0000AAAA;
+  while (wdt->wwps & (1<<4))
     ;
 
-  writel(0x00005555, WDT_1 + WDT_WSPR);
-  while (readl(WDT_1 + WDT_WWPS) & (1<<4))
+	wdt->wspr = 0x00005555;
+  while (wdt->wwps & (1<<4))
     ;
 }
 
 void
-timersinit(void)
+init_timers(void)
 {
   /* Select 32KHz clock for timer 2 */
-  writel(2, CM_DPLL + CLK_SEL2);
+  cm->timer2_clk = 2;
 
   /* set irq for overflow */
-  writel(1<<1, TIMER2 + TIMER_IRQENABLE_SET);
+	timer2->irqenable_set = 1<<1;
 
-  intcaddhandler(TINT2, &systickhandler);
+  intc_add_handler(TINT2, &systick_handler);
 }
 
 void
-systickhandler(uint32_t irqn)
+systick_handler(uint32_t irqn)
 {
   /* Clear irq status if it is set. */
-  writel(1<<1, TIMER2 + TIMER_IRQSTATUS);
+  timer2->irqstatus = 1<<1;
 
-  intcreset();
+	debug("got systick\n");
+
+  intc_reset();
   
   schedule();
 }
 
-void
-setsystick(uint32_t t)
-{
-  /* set timer */
-  writel(0xffffffff - t, TIMER2 + TIMER_TCRR); 
-  /* start timer */
-  writel(1, TIMER2 + TIMER_TCLR);
-}
-
 uint32_t
-mstoticks(uint32_t ms)
+ms_to_ticks(uint32_t ms)
 {
   return ms * 32;
 }
 
-uint32_t
-tickstoms(uint32_t t)
+void
+set_systick(uint32_t ms)
 {
-  return t / 32;
+  /* set timer */
+  timer2->tcrr = 0xffffffff - ms_to_ticks(ms);
+  
+  /* start timer */
+  timer2->tclr = 1;
 }
+
 

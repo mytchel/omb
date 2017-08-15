@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2017 Mytchel Hammond <mytchel@openmailbox.org>
+ * Copyright (c) 2017 Mytchel Hammond <mytch@lackname.org>
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -28,23 +28,38 @@
 #include <head.h>
 #include "fns.h"
 
-static void
-addrampages(uint32_t, uint32_t);
+#define L1X(va)          (va >> 20)
+#define L2X(va)          ((va >> 12) & ((1 << 8) - 1))
+#define PAL1(entry)      (entry & 0xffffffc00)
+#define PAL2(entry)      (entry & 0xffffff000)
 
-static void
-addiopages(uint32_t, uint32_t);
+#define L1_TYPE      0b11
+#define L1_FAULT     0b00
+#define L1_COARSE    0b01
+#define L1_SECTION   0b10
+#define L1_FINE      0b11
+
+#define L2_TYPE      0b11
+#define L2_FAULT     0b00
+#define L2_LARGE     0b01
+#define L2_SMALL     0b10
+#define L2_TINY       0b11
+
+uint32_t
+ttb[4096]__attribute__((__aligned__(16*1024))) = { L1_FAULT };
+
 
 extern uint32_t *ram_start;
 extern uint32_t *ram_end;
 extern uint32_t *kernel_start;
 extern uint32_t *kernel_end;
 
-struct pageholder *rampages = nil;
-struct pageholder *iopages = nil;
-
 void
-memoryinit(void)
+init_memory(void)
 {
+  int i;
+  
+#if 0
   addrampages(PAGE_ALIGN((uint32_t) &kernel_end + PAGE_SIZE - 1),
 	      (uint32_t) &ram_end);
   
@@ -68,7 +83,12 @@ memoryinit(void)
   addiopages(0x44E05000, 0x44E06000); /* DMTimer0 */
   addiopages(0x48040000, 0x48041000); /* DMTIMER2 */
 
-  mmuinit();
+#endif
+
+  for (i = 0; i < 4096; i++)
+    ttb[i] = L1_FAULT;
+
+  mmu_load_ttb(ttb);
 
   /* Give kernel unmapped access to all of ram. */	
   imap(&ram_start, &ram_end, AP_RW_NO, true);
@@ -82,118 +102,27 @@ memoryinit(void)
   /* INTCPS */
   imap((void *) 0x48200000, (void *) 0x48201000, AP_RW_NO, false);
 
-  mmuenable();
-}
-
-static void
-initpages(struct pageholder *p, struct pageholder **from, size_t npages,
-	  uint32_t start, page_t type)
-{
-  size_t i;
-
-  for (i = 0; i < npages; i++) {
-    p[i].pa = start;
-    p[i].type = type;
-    p[i].next = &p[i+1];
-
-    start += PAGE_SIZE;
-  }
-
-  p[i-1].next = *from;
-  *from = &p[0];
+  mmu_enable();
 }
 
 void
-addrampages(uint32_t start, uint32_t end)
+imap(void *start, void *end, int ap, bool cachable)
 {
-  struct pageholder *new;
-  uint32_t npages, size;
+  uint32_t x, mask;
 
-  size = end - start;
-  npages = 0;
+  x = (uint32_t) start & ~((1 << 20) - 1);
 
-  new = (struct pageholder *) start;
+  mask = (ap << 10) | L1_SECTION;
 
-  while (size > (PAGE_ALIGN(sizeof(struct pageholder) * npages)
-		 + PAGE_SIZE * npages)) {
-    npages++;
+  if (cachable) {
+    mask |= (7 << 12) | (1 << 3) | (0 << 2);
+  } else {
+    mask |= (0 << 12) | (0 << 3) | (1 << 2);
   }
-
-  npages--;
-
-  start = PAGE_ALIGN(start + sizeof(struct pageholder) * npages +
-		     PAGE_SIZE - 1);
-
-  initpages(new, &rampages, npages, start, PAGE_ram);
-}
-
-void
-addiopages(uint32_t start, uint32_t end)
-{
-  static reg_t holder = 0;
-  static size_t used = 0;
-
-  struct pageholder *p;
-  size_t npages, cpages;
-
-  npages = (end - start) / PAGE_SIZE;
-
-  while (npages > 0) {
-    if (holder == 0 || (used + sizeof(struct pageholder)) > PAGE_SIZE) {
-      holder = getrampage();
-      if (holder != 0) {
-	used = 0;
-      } else {
-	puts("kernel failed to get a page!\n");
-	while (true)
-	  ;
-      }
-    }
-
-    if (npages * sizeof(struct pageholder) > PAGE_SIZE - used) {
-      cpages = (PAGE_SIZE - used) / PAGE_SIZE;
-    } else {
-      cpages = npages;
-    }
-
-    p = (struct pageholder *) (holder + used);
-
-    initpages(p, &iopages, cpages, start, PAGE_io);
-
-    used += cpages * sizeof(struct pageholder);
-    npages -= cpages;
+  
+  while (x < (uint32_t) end) {
+    ttb[L1X(x)] = x | mask;
+    x += 1 << 20;
   }
 }
 
-reg_t
-getrampage(void)
-{
-  struct pageholder *p;
-
-  p = rampages;
-  rampages = p->next;
-
-  return p->pa;
-}
-
-reg_t
-getiopage(reg_t pa)
-{
-  struct pageholder **p, *w;
-
-  for (p = &iopages; *p != nil; p = &((*p)->next)) {
-    if ((*p)->pa == pa) {
-      w = *p;
-      *p = (*p)->next;
-
-      if (w->refs == 0) {
-	w->refs = 1;
-	return pa;
-      } else {
-	return nil;
-      }
-    }
-  }
-
-  return nil;
-}

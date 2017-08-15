@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2017 Mytchel Hammond <mytchel@openmailbox.org>
+ * Copyright (c) 2017 Mytchel Hammond <mytch@lackname.org>
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -32,6 +32,8 @@
 #define PAGE_SIZE	 (1UL << PAGE_SHIFT)
 #define PAGE_MASK	 (~(PAGE_SIZE - 1))
 
+typedef struct label label_t;
+
 struct label {
   uint32_t psr, sp, lr;
   uint32_t regs[13];
@@ -39,3 +41,4 @@ struct label {
 } __attribute__((__packed__));
 
 #endif
+

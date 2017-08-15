@@ -33,15 +33,19 @@ kmain(void)
 {
   puts("OMB Booting...\n");
 
-  intcinit();
-  memoryinit();
-  watchdoginit();
-  timersinit();
-
-  memprocinit();
-  mainprocinit();
-
-  schedule();
+	init_intc();
+	puts("init watchdog\n");
+	init_watchdog();
+	puts("init timer\n");
+	init_timers();
+	puts("init mem\n");
+	init_memory();
+	
+	init_proc0();
+	
+	puts("start!\n");
+	
+	schedule();
   
   /* Never reached */
   return 0;

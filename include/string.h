@@ -28,6 +28,11 @@
 #ifndef _STRING_H_
 #define _STRING_H_
 
+#include <stdarg.h>
+
+bool
+isspace(char c);
+
 bool
 strncmp(const char *s1, const char *s2, size_t len);
 
@@ -47,24 +52,10 @@ size_t
 snprintf(char *str, size_t max, const char *fmt, ...);
 
 int
-printf(const char *, ...);
-
-int
-fprintf(int fd, const char *, ...);
-
-int
-scanf(const char *fmt, ...);
-
-int
-fscanf(int fd, const char *fmt, ...);
-
-int
 sscanf(const char *str, const char *fmt, ...);
 
 long
 strtol(const char *nptr, char **endptr, int base);
-
-#ifdef _STDARG_H_
 
 size_t
 vsnprintf(char *str, size_t max, const char *fmt, va_list ap);
@@ -77,4 +68,3 @@ vsscanf(const char *str, const char *fmt, va_list ap);
 
 #endif
 
-#endif

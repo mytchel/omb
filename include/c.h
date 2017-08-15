@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2017 Mytchel Hammond <mytchel@openmailbox.org>
+ * Copyright (c) 2017 Mytchel Hammond <mytch@lackname.org>
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -31,32 +31,32 @@
 #include <err.h>
 #include <types.h>
 
-int
-exit(void) __attribute__((noreturn));
+/* All messages must be MESSAGE_LEN bytes long. */
 
-/* proc      -> A page of ram for the process table entry.
- * kheap     -> Start of ram for the processes kernel heap.
- * hlen      -> Length of new kernel heap.
- * start     -> Start of the new processes virtual address space.
- *             This will be unmapped from the callers address space.
- * len       -> Length of address space given to new process.
- * offset    -> Where start should be mapped in the new address space.
- * entry     -> Start executing here.
- * ustacktop -> Initial user stack.
- * arg       -> Argument given to new process.
- */
+#define MESSAGE_LEN 64
 
+/* Sends the message s to pid and puts the reply in r.
+   Returns an error or 0. */
 int
-fork(void *proc, void *kstack,
-     void *kheap, size_t hlen,
-     void *start, size_t len, void *offset,
-     void *entry, void *ustacktop,
-     void *arg);
+send(int pid, 
+     uint8_t *s, 
+     uint8_t *r);
 
-int
-getpid(void);
 
+/* Recieve a message into m and return the pid of the sender
+   or error. */
 int
+recv(uint8_t *m);
+
+
+/* Reply to a message from pid.
+   Returns an error or 0. */
+int
+reply(int pid, 
+      uint8_t *m);
+
+
+bool
 cas(void *addr, void *old, void *new);
 
 #define roundptr(x) (x % sizeof(void *) != 0 ?			 \

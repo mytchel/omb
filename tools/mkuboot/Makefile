@@ -26,10 +26,10 @@
 src = mkuboot.c copy_elf32.c copy_elf64.c
 
 mkuboot: $(src)
-	@cc -o $@ $(src) -lz
+	$(HOSTCC) $(HOSTCFLAGS) -o $@ $(src) -lz $(HOSTLDFLAGS)
 
 
 .PHONY: clean
 clean:
-	@rm -f mkuboot
+	rm -f mkuboot
 

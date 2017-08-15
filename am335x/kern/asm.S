@@ -28,24 +28,24 @@
 
 .section .text
 
-.global setintr
-.global setlabel
-.global gotolabel
-.global droptouser
-.global funcloader
-.global fsrstatus
-.global faultaddr
-.global cachedisable
-.global cacheenable
-.global cacheflush
-.global mmuloadttb
-.global mmuenable
-.global mmudisable
-.global mmuinvalidate
+.global set_intr
+.global set_label
+.global goto_label
+.global drop_to_user
+.global func_loader
+.global fsr_status
+.global fault_addr
+.global cache_disable
+.global cache_enable
+.global cache_flush
+.global mmu_load_ttb
+.global mmu_enable
+.global mmu_disable
+.global mmu_invalidate
 .global cas
 
 
-setintr:
+set_intr:
 	push {r1, lr}
 	mrs r1, cpsr
 	cmp r0, #MODE_DI
@@ -56,7 +56,7 @@ setintr:
 	pop {r1, pc}
 
 
-setlabel:
+set_label:
 	mrs r1, cpsr
 	stmia r0, {r1, sp}
 	add r0, r0, #(4 * 7)
@@ -66,7 +66,7 @@ setlabel:
 	mov pc, lr
 	
 
-gotolabel:
+goto_label:
 	ldmia r0, {r1, sp}
 	add r0, r0, #(4 * 7)
 	ldmia r0, {r4 - r12, lr}
@@ -76,7 +76,7 @@ gotolabel:
 	mov pc, lr
 
 
-droptouser:
+drop_to_user:
 	mov sp, r1
 
 	cpsid if, #MODE_SYS
@@ -90,27 +90,17 @@ droptouser:
 	movs pc, lr
 
 
-funcloader:
-	ldr lr, =1f
-	ldmia sp!, {r0, pc}
-1:
-	ldr r0, =up
-	ldr r0, [r0]
-	bl procexit
-	b .
-
-	
-fsrstatus:
+fsr_status:
 	mrc p15, 0, r0, c5, c0, 0
 	mov pc, lr
 	
 	
-faultaddr:
+fault_addr:
 	mrc p15, 0, r0, c6, c0, 0
 	mov pc, lr
 
 
-cachedisable:
+cache_disable:
 	@ Disable cache and mmu
 	mrc p15, 0, r0, c1, c0, 0
 	bic r0, r0, #(1<<2) @ unified cache
@@ -118,20 +108,20 @@ cachedisable:
 	mov pc, lr
 
 	
-cacheenable:
+cache_enable:
 	mrc p15, 0, r0, c1, c0, 0
 	orr r0, r0, #(1<<2) @ unified cache
 	mcr p15, 0, r0, c1, c0, 0
 	mov pc, lr
 	
 	
-cacheflush:
+cache_flush:
 	mov r0, #0
 	mcr p15, 0, r0, c7, c7, 0
 	mov pc, lr
 
 
-mmuloadttb:
+mmu_load_ttb:
 	push {lr}
 	mcr p15, 0, r0, c2, c0, 0
 
@@ -142,21 +132,21 @@ mmuloadttb:
 	pop {pc}
 	
 
-mmuinvalidate:
+mmu_invalidate:
 	mcr p15, 0, r0, c8, c7, 0
 	mov pc, lr
 	
 
-mmuenable:
+mmu_enable:
 	push {lr}
-	bl mmuinvalidate
+	bl mmu_invalidate
 	mrc p15, 0, r0, c1, c0, 0
 	orr r0, r0, #1
 	mcr p15, 0, r0, c1, c0, 0
 	pop {pc}
 	
 
-mmudisable:
+mmu_disable:
 	mrc p15, 0, r0, c1, c0, 0
 	bic r0, r0, #1
 	mcr p15, 0, r0, c1, c0, 0
@@ -168,13 +158,13 @@ mmudisable:
 cas:
 	ldrex r3, [r0]
 	cmp r3, r1
-	movne r0, #ERR
+	movne r0, #0
 	movne pc, lr
 	
 	strex r3, r2, [r0]
 	cmp r3, #1
-	moveq r0, #ERR
-	movne r0, #OK
+	moveq r0, #0
+	movne r0, #1
 	
 	mov pc, lr
 

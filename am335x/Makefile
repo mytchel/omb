@@ -1,5 +1,5 @@
 #
-#  Copyright (c) 2017 Mytchel Hammond <mytchel@openmailbox.org>
+#  Copyright (c) 2017 Mytchel Hammond <mytch@lackname.org>
 #  
 #  Permission is hereby granted, free of charge, to any person
 #  obtaining a copy of this software and associated documentation
@@ -26,45 +26,42 @@
 .SUFFIXES:
 .SUFFIXES: .c .S .h .o .a .elf .bin .list .umg
 
+loadaddr=0x82000000
 TARGET = am335x
 
 CROSS = arm-none-eabi-
 
 CC = $(CROSS)gcc
 LD = $(CROSS)ld
-AR := $(CROSS)ar
+AR = $(CROSS)ar
 OBJCOPY = $(CROSS)objcopy
 OBJDUMP = $(CROSS)objdump
 
-CFLAGS := -std=c89 -O3 \
+CFLAGS = -std=c89 -O3 \
 	-Wall -Werror \
 	-mcpu=cortex-a8 \
 	-nostdinc -ffreestanding \
 	-Iinclude -I../include -Ikern/.
 
-LDFLAGS += -nostdlib -nodefaultlibs -static \
-	-L/usr/local/lib/gcc/arm-none-eabi/4.9.3/
+LDFLAGS = -nostdlib -nodefaultlibs -static \
+	-L/usr/local/lib/gcc/arm-none-eabi/6.3.1/
 
-loadaddr=0x82000000
+HOSTCC = gcc
+HOSTLD = ld
+HOSTAR = ar
+HOSTOBJCOPY = objcopy
+HOSTOBJDUMP = objdump
+
+HOSTCFLAGS = -std=c89 -O3 \
+	-Wall -Werror
+
+HOSTLDFLAGS = 
+
 
 .PHONY: all
 all: am335x.list am335x.umg
 
 CLEAN += am335x.umg am335x.list init.list
-
-
-ISRC_A := \
-	init/c.S
-
-ISRC_C := \
-	init/init.c
-
-IOBJECTS := \
-	$(ISRC_A:%.S=%.o) \
-	$(ISRC_C:%.c=%.o)
-
-CLEAN += $(IOBJECTS)
-
 
 
 KSRC_A := \
@@ -73,27 +70,18 @@ KSRC_A := \
 
 
 KSRC_C := \
-        kern/main.c             \
-        kern/trap.c             \
-        kern/mem.c              \
-        kern/mmu.c              \
-        kern/nil.c              \
-        kern/uart.c             \
-        kern/fork.c             \
-        kern/timer.c            \
-        kern/memproc.c          \
-        kern/mainproc.c         \
-        ../kern/util.c          \
-        ../kern/mem.c           \
-        ../kern/com.c           \
-        ../kern/systab.c        \
-        ../kern/sysproc.c       \
-        ../kern/syscom.c        \
-        ../kern/sysmap.c        \
-        ../kern/string.c        \
-        ../kern/printf.c        \
-        ../kern/proc.c          \
-	_init.c
+        kern/main.c               \
+        kern/trap.c               \
+        kern/timer.c              \
+        kern/mem.c                \
+        kern/uart.c               \
+        kern/proc0.c              \
+        ../kern/util.c            \
+        ../kern/proc.c            \
+        ../lib/libstring/conv.c   \
+        ../lib/libstring/scanf.c  \
+        ../lib/libstring/string.c 
+
 
 KOBJECTS := \
 	$(KSRC_A:%.S=%.o) \
@@ -119,22 +107,12 @@ CLEAN += $(KOBJECTS)
 	$(OBJDUMP) -S $< > $@
 
 
-init.elf: init/init.ld $(IOBJECTS)
-	$(LD) $(LDFLAGS) \
-		-T init/init.ld -Ttext 0x1000 \
-		-o $@ $(IOBJECTS) -lgcc
-
-
-CLEAN += _init.c init.bin init.elf 
-_init.c: init.bin
-	cat init.bin | ../tools/bintoarray/bintoarray initcode > _init.c
-
-
 CLEAN += $(TARGET).elf $(TARGET).list
 am335x.elf: kern/kernel.ld $(KOBJECTS)
 	$(LD) $(LDFLAGS) \
 		-T kern/kernel.ld -Ttext $(loadaddr) \
-		-o $@ $(KOBJECTS) -lgcc
+		-o $@ $(KOBJECTS) \
+		-lgcc
 
 
 CLEAN += am335x.elf am335x.bin
@@ -147,3 +125,4 @@ am335x.umg: am335x.bin
 .PHONY: clean 
 clean: 
 	rm -f $(CLEAN)
+

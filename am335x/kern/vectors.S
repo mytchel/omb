@@ -40,8 +40,8 @@ _kstart:
 	cmp r0, r1
 	blt 1b
 
-	bl cachedisable
-	bl mmudisable
+	bl cache_disable
+	bl mmu_disable
 
 	mrc p15, 0, r0, c1, c0, 0
 	orr r0, r0, #(1<<1) @ enable branch prediction
@@ -56,26 +56,26 @@ _kstart:
 	cps #MODE_SVC
 	ldr sp, =ex_stack_top
 	
-	bl vectortableinit
+	bl vector_table_init
 
 	b kmain
 
 
-vectortableinit:
+vector_table_init:
 	@ Shift vector table to 0x00000000
 	@ See page 514 of ARM System Developers Guide
 	mrc p15, 0, r0, c1, c0, 0
 	bic r0, r0, #(1 << 13) 		@ set V flag to 0 (disable high vectors)
 	mcr p15, 0, r0, c1, c0, 0
 	
-	ldr r0, =vectortable
+	ldr r0, =vector_table
 	mcr p15, 0, r0, c12, c0, 0	@ set vector base address
 	
 	bx lr
 
 
 .balign 32
-vectortable:
+vector_table:
 	ldr pc, =_kstart
 	ldr pc, =undefined_instruction
 	ldr pc, =swi_ex
@@ -87,35 +87,37 @@ vectortable:
 
 
 swi_ex:
-	cmp r12, #NSYSCALLS
-	movpls pc, lr
+	mov pc, lr
+#
+#	cmp r12, #NSYSCALLS
+#	movpls pc, lr
 	
-	stmfd sp!, {r9, r10, r11, lr}
+#	stmfd sp!, {r9, r10, r11, lr}
 
-	mrs r9, spsr
+#	mrs r9, spsr
 
-	cpsid if, #MODE_SYS
+#	cpsid if, #MODE_SYS
 
-	mov r10, sp
-	mov r11, lr
+#	mov r10, sp
+#	mov r11, lr
 	
-	cpsie if, #MODE_SVC
+#	cpsie if, #MODE_SVC
 	
-	ldr lr, =systab
-	add r12, lr, r12, lsl #2
-	ldr lr, =1f
-	ldr pc, [r12]
+#	ldr lr, =systab
+#	add r12, lr, r12, lsl #2
+#	ldr lr, =1f
+#	ldr pc, [r12]
 	
-1:
-	cpsid if, #MODE_SYS
+#1:
+#	cpsid if, #MODE_SYS
 
-	mov sp, r10
-	mov lr, r11
+#	mov sp, r10
+#	mov lr, r11
 	
-	cpsid if, #MODE_SVC
+#	cpsid if, #MODE_SVC
 
-	msr spsr, r9
-	ldmfd sp!, {r9, r10, r11, pc}^
+#	msr spsr, r9
+#	ldmfd sp!, {r9, r10, r11, pc}^
 
 	
 irq_ex:

@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2017 Mytchel Hammond <mytchel@openmailbox.org>
+ * Copyright (c) 2017 Mytchel Hammond <mytch@lackname.org>
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -45,8 +45,6 @@ typedef	long			ssize_t;
 
 typedef unsigned int		reg_t;
 
-#define UINT_MAX                0xffffffff
-
 #define nil 0
 
 typedef uint8_t	bool;
@@ -55,3 +53,4 @@ typedef uint8_t	bool;
 #define true 1
 
 #endif
+

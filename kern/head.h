@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2017 Mytchel Hammond <mytchel@openmailbox.org>
+ * Copyright (c) 2017 Mytchel Hammond <mytch@lackname.org>
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -26,217 +26,57 @@
  */
 
 #include <c.h>
-#include <syscalls.h>
-#include <com.h>
-#include <mem.h>
-#include <stdarg.h>
 #include <string.h>
 
-
-#define ASSERT_PAGE_SIZE(m) \
-  STATIC_ASSERT(sizeof(struct m) <= PAGE_SIZE, \
-		too_big##m)
-
-struct heappage {
-  struct heappage *next;
-};
-
-ASSERT_PAGE_SIZE(heappage);
-
-struct grant {
-  #define GRANT_EMPTY  1
-  #define GRANT_PART   2
-  #define GRANT_READY  3
-  int state;
-  struct proc *waiting;
-  
-  int from;
-  int flags;
-  size_t npages;
-  reg_t pages[GRANTSMALLPAGES];
-};
-
-#define MBOXSIZE 4
-
-struct mbox {
-  size_t len, head, rtail, wtail;
-  struct proc *swaiting, *rwaiting;
-  struct message messages[MBOXSIZE];
-};
+typedef struct proc *proc_t;
 
 typedef enum {
-  PROC_dead,
-  PROC_suspend,
-  PROC_recv,
-  PROC_send,
-  PROC_ready,
-  PROC_oncpu,
+	PROC_oncpu,
+	PROC_ready,
+	PROC_dead,
 } procstate_t;
 
 struct proc {
-  struct proc *snext; /* For scheduler */
-  struct proc *wnext; /* For wait list */
-
-  struct label label;
-
-  procstate_t state;
-  int pid;
-
-  reg_t kstack;
-
-  struct mbox mbox;
-  struct grant grant;
-
-  struct space *space;
-  struct heappage *heap;
+	proc_t next;
+	
+	label_t label;
+	
+	procstate_t state;
+	int pid;
+	
+	reg_t kstack;
 };
 
-ASSERT_PAGE_SIZE(proc);
+proc_t
+proc_new(reg_t page,
+        reg_t kstack);
 
-struct proc *
-procnew(reg_t page,
-	reg_t kstack,
-	struct heappage *heap,
-	struct space *space);
+proc_t
+find_proc(int pid);
 
-void
-procexit(struct proc *p);
-
-void
-procready(struct proc *p);
-
-void
-procsuspend(struct proc *p);
-
-void
-procrecv(void);
-
-void
-procsend(void);
-
-struct proc *
-findproc(int pid);
-
-int
-procwlistadd(struct proc **pp, struct proc *p);
-
-struct proc *
-procwlistpop(struct proc **pp);
-
- /* Must all be called with interrupts disabled */
 void
 schedule(void);
 
 int
-setlabel(struct label *);
+debug(const char *fmt, ...);
 
-int
-gotolabel(struct label *) __attribute__((noreturn));
-
-void
-nilfunc(void);
+/* Machine dependant. */
 
 void
-droptouser(struct label *u, reg_t ksp)
-  __attribute__((noreturn));
+puts(const char *c);
 
 void
-forkfunc(struct proc *p, int (*func)(void *), void *arg);
-
-void
-forkchild(struct proc *p, void *entry, void *ustacktop, void *arg);
-
-void *
-heappop(void);
-
-void
-heapadd(void *page);
-
-void
-mboxinit(struct mbox *mbox);
-
-void
-mboxclose(struct mbox *m);
-
-int
-ksendnb(int pid, struct message *m);
-
-int
-ksend(int pid, struct message *m);
-
-int
-krecvnb(struct message *m);
-
-int
-krecv(struct message *m);
-
-struct space *
-spacenew(reg_t page);
-
-void
-spacefree(struct space *s);
-
-int
-validaddr(void *addr, size_t len, int flags);
-
-int
-mappingadd(struct space *s,
-	   reg_t va,
-	   reg_t pa,
-	   int flags);
-
-int
-mappingremove(struct space *s,
-	      reg_t va);
-
-reg_t
-mappingfind(struct space *s,
-	    reg_t va,
-	    int *flags);
-
-int
-checkflags(int need, int got);
-
-void
-grantinit(struct grant *g);
-
-void
-grantfree(struct grant *g);
-
-int
-granttake(struct grant *g);
-
-int
-granttakenb(struct grant *g);
-
-int
-grantuntake(struct grant *g);
-
-int
-grantready(struct grant *g);
-
-void
-mmuswitch(struct space *s);
-
-void *
-memmove(void *dest, const void *src, size_t len);
-
-void *
-memset(void *dest, int c, size_t len);
-
-void
-puts(const char *);
+set_systick(uint32_t ms);
 
 intr_t
-setintr(intr_t i);
+set_intr(intr_t i);
 
-uint32_t
-tickstoms(uint32_t);
+int
+set_label(label_t *l);
 
-uint32_t
-mstoticks(uint32_t);
+int
+goto_label(label_t *l) __attribute__((noreturn));
 
-void
-setsystick(uint32_t ticks);
+/* Variables. */
 
-extern struct proc *up;
+proc_t up;

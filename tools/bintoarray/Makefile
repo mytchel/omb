@@ -26,9 +26,10 @@
 src = bintoarray.c
 
 bintoarray: $(src)
-	$(CC) $(CFLAGS) -o $@ $(src) $(LDFLAGS)
+	$(HOSTCC) $(HOSTCFLAGS) -o $@ $(src) $(HOSTLDFLAGS)
 
 
 .PHONY: clean
 clean:
 	rm -f bintoarray
+

@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2017 Mytchel Hammond <mytchel@openmailbox.org>
+ * Copyright (c) 2017 Mytchel Hammond <mytch@lackname.org>
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -27,29 +27,20 @@
 
 #include <head.h>
 
-void *
-memmove(void *dest, const void *src, size_t len)
+int
+debug(const char *fmt, ...)
 {
-  uint8_t *d;
-  const uint8_t *s;
+	char str[128];
+	va_list ap;
+	size_t i;
 	
-  d = dest;
-  s = src;
-
-  while (len-- > 0) {
-    *d++ = *s++;
-  }
-		
-  return dest;
-}
-
-void *
-memset(void *dest, int c, size_t len)
-{
-  uint8_t *bb = dest;
+	va_start(ap, fmt);
+	i = vsnprintf(str, sizeof(str), fmt, ap);
+	va_end(ap);
 	
-  while (len-- > 0)
-    *bb++ = c;
-		
-  return dest;
+	if (i > 0) {
+		puts(str);
+	}
+	
+	return i;
 }

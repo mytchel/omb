@@ -29,106 +29,111 @@
 #include "fns.h"
 #include "trap.h"
 
+#define nirq 128
 #define INTC			0x48200000
 
-#define INTC_SYSCONFIG		0x10
-#define INTC_SYSSTATUS		0x14
-#define INTC_SIR_IRQ		0x40
-#define INTC_SIR_FIQ		0x44
-#define INTC_CONTROL		0x48
-#define INTC_IDLE		0x50
+struct intc {
+	uint32_t revision;
+	uint32_t pad1[3];
+	uint32_t sysconfig;
+	uint32_t sysstatus;
+	uint32_t pad2[10];
+	uint32_t sir_irq;
+	uint32_t sir_fiq;
+	uint32_t control;
+	uint32_t protection;
+	uint32_t idle;
+	uint32_t pad3[3];
+	uint32_t irq_priority;
+	uint32_t fiq_priority;
+	uint32_t threshold;
+	uint32_t pad4[5];
+	
+	struct {
+		uint32_t itr;
+		uint32_t mir;
+		uint32_t mir_clear;
+		uint32_t mir_set;
+		uint32_t isr_set;
+		uint32_t isr_clear;
+		uint32_t pending_irq;
+		uint32_t pending_fiq;
+	} set[4];
+	
+	uint32_t ilr[nirq];
+};
 
-#define INTC_ITRn(i)		0x80+(0x20*i)+0x00
-#define INTC_MIRn(i)		0x80+(0x20*i)+0x04
-#define INTC_CLEARn(i)		0x80+(0x20*i)+0x08
-#define INTC_SETn(i)		0x80+(0x20*i)+0x0c
-#define INTC_ISR_SETn(i)	0x80+(0x20*i)+0x10
-#define INTC_ISR_CLEARn(i)	0x80+(0x20*i)+0x14
-#define INTC_PENDING_IRQn(i)	0x80+(0x20*i)+0x18
-#define INTC_PENDING_FIQn(i)	0x80+(0x20*i)+0x1c
-
-#define INTC_ILRn(i)		0x100+(0x04*i)
-
-#define nirq 128
-
-/*
-static void
-maskintr(uint32_t irqn);
-*/
-static void
-unmaskintr(uint32_t irqn);
+struct intc *intc = (struct intc *) INTC;
 
 static void (*handlers[nirq])(uint32_t) = {nil};
 
 void
-intcinit(void)
+init_intc(void)
 {
   int i;
-
+	
   /* enable interface auto idle */
-  writel(1, INTC + INTC_SYSCONFIG);
+  intc->sysconfig = 1;
 
   /* mask all interrupts. */
-  for (i = 0; i < nirq / 32; i++) {
-    writel(0xffffffff, INTC + INTC_MIRn(i));
+  for (i = 0; i < 4; i++) {
+  	intc->set[i].mir = 0xffffffff;
   }
 	
   /* Set all interrupts to lowest priority. */
   for (i = 0; i < nirq; i++) {
-    writel(63 << 2, INTC + INTC_ILRn(i));
+  	intc->ilr[i] = 63 << 2;
   }
 	
-  writel(1, INTC + INTC_CONTROL);
+	intc->control = 1;
 }
 
-/*
 void
-maskintr(uint32_t irqn)
+mask_intr(uint32_t irqn)
 {
   uint32_t mask, mfield;
 
   mfield = irqn / 32;
   mask = 1 << (irqn % 32);
 
-  writel(mask, INTC + INTC_SETn(mfield));
+	intc->set[mfield].mir_set = mask;
 }
-*/
 
 void
-unmaskintr(uint32_t irqn)
+unmask_intr(uint32_t irqn)
 {
   uint32_t mask, mfield;
 
   mfield = irqn / 32;
   mask = 1 << (irqn % 32);
 
-  writel(mask, INTC + INTC_CLEARn(mfield));
+	intc->set[mfield].mir_clear = mask;
 }
 
 void
-intcaddhandler(uint32_t irqn, void (*func)(uint32_t))
+intc_add_handler(uint32_t irqn, void (*func)(uint32_t))
 {
   handlers[irqn] = func;
-  unmaskintr(irqn);
+  unmask_intr(irqn);
 }
 
 void
-intcreset(void)
+intc_reset(void)
 {
-  writel(1, INTC + INTC_CONTROL);
+	intc->control = 1;
 }
 
 static void
-irqhandler(void)
+irq_handler(void)
 {
   uint32_t irq;
 	
-  irq = readl(INTC + INTC_SIR_IRQ);
+  irq = intc->sir_irq;
   
   if (handlers[irq]) {
     handlers[irq](irq);
   } else {
-    puts("no handler\n");
+    debug("no handler\n");
   }
 }
 
@@ -137,26 +142,28 @@ trap(reg_t pc, int type)
 {
   uint32_t fsr;
   reg_t addr;
+  
+  debug("trap at 0x%h of type %i\n", pc, type);
 
   switch(type) {
   case ABORT_INTERRUPT:
-    irqhandler();
+    irq_handler();
 
     return; /* Note the return. */
 
   case ABORT_INSTRUCTION:
-    printf("%i bad instruction at 0x%h\n", up->pid, pc);
+    debug("bad instruction at 0x%h\n", pc);
     break;
 
   case ABORT_PREFETCH:
-    printf("%i prefetch abort at 0x%h\n", up->pid, pc);
+    debug("prefetch abort at 0x%h\n", pc);
     break;
 
   case ABORT_DATA:
-    addr = faultaddr();
-    fsr = fsrstatus() & 0xf;
+    addr = fault_addr();
+    fsr = fsr_status() & 0xf;
 
-    printf("%i data abort at 0x%h for 0x%h type 0x%h\n", up->pid, pc, addr, fsr);
+    debug("data abort at 0x%h for 0x%h type 0x%h\n", pc, addr, fsr);
     
     switch (fsr) {
     case 0x5: /* section translation */
@@ -183,8 +190,8 @@ trap(reg_t pc, int type)
     break;
   }
 
-  printf("killing proc %i\n", up->pid);
-  procexit(up);
-  
-  /* Never reached */
+	debug("trap doesn't know what to do!\n");
+	while (true)
+		;
 }
+

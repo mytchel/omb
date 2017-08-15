@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2017 Mytchel Hammond <mytchel@openmailbox.org>
+ * Copyright (c) 2017 Mytchel Hammond <mytch@lackname.org>
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -27,279 +27,134 @@
 
 #include <head.h>
 
-static void addtolistback(struct proc **, struct proc *);
-static bool removefromlist(struct proc **, struct proc *);
+void add_to_list_back(struct proc **, struct proc *);
+bool remove_from_list(struct proc **, struct proc *);
 
-static uint32_t nextpos = 0;
-static uint32_t nextcode = 1;
+static uint32_t nextpid = 0;
 
-#define PROCSMAX 1024
-
-static struct proc *procs[PROCSMAX] = {nil};
-static struct proc *ready = nil;
-
-struct proc *up = nil;
+static proc_t procs = nil;
+proc_t up = nil;
 
 static struct proc *
-nextproc(void)
+next_proc(void)
 {
-  struct proc *p;
+	proc_t p;
 
-  p = ready;
+	p = up->next;
+	if (p == nil) {
+		p = procs;
+	}
 
-  if (p == nil) {
-    return nil;
-  } else if (p->state != PROC_ready) {
-    return nextproc();
-  } else {
-    ready = p->snext;
-    return p;
-  }
+	if (p->state == PROC_ready) {
+		return p;
+	} else {
+		return next_proc();
+	}
 }
 
 void
 schedule(void)
 {
-  if (up != nil) {
-    if (up->state == PROC_oncpu) {
-      up->state = PROC_ready;
-      addtolistback(&ready, up);
-    }
+	debug("schedule\n");
+	
+	debug("take %i off cpu\n", up->pid);
+	
+	if (up->state == PROC_oncpu) {
+		up->state = PROC_ready;
+	}
     
-    if (setlabel(&up->label)) {
-      return;
-    }
-  }
+	if (set_label(&up->label)) {
+		return;
+	}
+	
+	up = next_proc();
+	
+	debug("put %i on cpu\n", up->pid);
+	
+	set_systick(100);
 
-  up = nextproc();
-  setsystick(mstoticks(100));
-
-  if (up == nil) {
-    nilfunc();
- } else {
-    up->state = PROC_oncpu;
-    mmuswitch(up->space);
-    gotolabel(&up->label);
-  }
+	up->state = PROC_oncpu;
+	goto_label(&up->label);
 }
 
 void
-addtolistback(struct proc **l, struct proc *p)
+add_to_list_back(proc_t *l, proc_t p)
 {
-  struct proc *pp;
+	proc_t pp;
 
-  p->snext = nil;
+	p->next = nil;
   
-  while (true) {
-    for (pp = *l; pp != nil && pp->snext != nil; pp = pp->snext)
-      ;
+	while (true) {
+		for (pp = *l; pp != nil && pp->next != nil; pp = pp->next)
+			;
 
-    if (pp == nil) {
-      if (cas(l, nil, p) == OK) {
-	break;
-      }
-    } else if (cas(&pp->snext, nil, p) == OK) {
-      break;
-    }
-  }
+		if (pp == nil) {
+			if (cas(l, nil, p)) {
+				break;
+			}
+		} else if (cas(&pp->next, nil, p)) {
+			break;
+		}
+	}
 }
 
 bool
-removefromlist(struct proc **l, struct proc *p)
+remove_from_list(proc_t *l, proc_t p)
 {
-  struct proc *pt;
+	proc_t pt;
 
-  while (true) {
-    if (*l == p) {
-      if (cas(l, p, p->snext)) {
-	return true;
-      }
-    } else {
-      for (pt = *l; pt != nil && pt->snext != p; pt = pt->snext)
-	;
+	while (true) {
+		if (*l == p) {
+			if (cas(l, p, p->next)) {
+				return true;
+			}
+		} else {
+			for (pt = *l; pt != nil && pt->next != p; pt = pt->next)
+				;
 
-      if (pt == nil) {
-	return false;
-      } else if (cas(&pt->snext, p, p->snext) == OK) {
-	return true;
-      }
-    }
-  }
+			if (pt == nil) {
+				return false;
+			} else if (cas(&pt->next, p, p->next)) {
+				return true;
+			}
+		}
+	}
 }
 	
-struct proc *
-procnew(reg_t page, reg_t kstack, 
-	struct heappage *heap,
-	struct space *space)
+proc_t
+proc_new(reg_t page, 
+        reg_t kstack)
 {
-  int pos, code, ncode;
-  struct proc *p;
+  proc_t p;
 	
-  p = (struct proc *) page;
+  p = (proc_t) page;
 
   p->kstack = kstack;
-  p->heap = heap;
+  p->state = PROC_dead;
 
-  mboxinit(&p->mbox);
-  grantinit(&p->grant);
+  p->next = nil;
 
-  p->space = space;
+	do {
+		p->pid = nextpid;
+	} while (!cas(&nextpid, 
+	              (void *) p->pid, 
+	              (void *) (p->pid + 1)));
 
-  p->state = PROC_suspend;
-
-  p->wnext = nil;
-  p->snext = nil;
-
-  /* Get a random code, this will suffice for now. */
-  do {
-    code = nextcode;
-    ncode = ((code + 13) * 3) & 0xffff;
-  } while (cas(&nextcode, (void *) code, (void *) ncode) != OK);
-
-  /* Put proc in the procs table, and set pid. */
-  do {
-    do {
-      pos = nextpos % PROCSMAX;
-    } while (cas(&nextpos, (void *) pos, (void *) (pos + 1)) != OK);
-
-    p->pid = (pos << 16) | code;
- 
-  } while (cas(&procs[pos], nil, p) != OK);
+	add_to_list_back(&procs, p);
 
   return p;
 }
 
-void
-procexit(struct proc *p)
+proc_t
+find_proc(int pid)
 {
-  struct space *space;
-  intr_t i;
-
-  printf("procexit %i\n", p->pid);
+  proc_t p;
   
-  if (p->state == PROC_ready) {
-    removefromlist(&ready, p);
-  }
-
-  mboxclose(&p->mbox);
-  grantfree(&p->grant);
-
-  i = setintr(INTR_off);
-
-  if (p == up) {
-    mmuswitch(nil);
-  }
- 
-  do {
-    space = p->space;
-  } while (cas(&p->space, space, nil) != OK);
-
-  if (space != nil) {
-    spacefree(space);
-  }
-
-  setintr(i);
-
-  /* TODO: free kstack, proc and heap pages  */
-
-  while (cas(&procs[p->pid >> 16], p, nil) != OK)
-    ;
-
-  i = setintr(INTR_off);
-  if (p == up) {
-    up = nil;
-    schedule();
-  }
-  setintr(i);
-}
-
-void
-procsuspend(struct proc *p)
-{
-  intr_t i;
-
-  p->state = PROC_suspend;
-
-  i = setintr(INTR_off);
-  if (p == up) {
-    schedule();
-  }
-  setintr(i);
-}
-
-void
-procrecv(void)
-{
-  intr_t i;
-
-  i = setintr(INTR_off);
-  up->state = PROC_recv;
-  schedule();
-  setintr(i);
-}
-
-void
-procsend(void)
-{
-  intr_t i;
-
-  i = setintr(INTR_off);
-  up->state = PROC_send;
-  schedule();
-  setintr(i);
-}
-
-void
-procready(struct proc *p)
-{
-  if (p->state == PROC_ready || p->state == PROC_oncpu) {
-    return;
-  }
-
-  p->state = PROC_ready;
-  addtolistback(&ready, p);
-}
-
-struct proc *
-findproc(int pid)
-{
-  struct proc *p;
-  int pos;
-
-  pos = pid >> 16;
-  if (pos > PROCSMAX) {
-    return nil;
+  for (p = procs; p != nil; p = p->next) {
+  	if (p->pid == pid) {
+  		return p;
+  	}
   }
   
-  p = procs[pos];
-  if (p == nil) {
-    return nil;
-  } else if (p->pid == pid) {
-    return p;
-  } else {
-    return nil;
-  }
-}
-
-int
-procwlistadd(struct proc **pp, struct proc *p)
-{
-  while (*pp != nil)
-    pp = &((*pp)->wnext);
-
-  p->wnext = nil;
-
-  return cas(pp, nil, p);
-}
-
-struct proc *
-procwlistpop(struct proc **pp)
-{
-  struct proc *p;
-
-  do {
-    p = *pp;
-  } while (p != nil && cas(pp, p, p->wnext) != OK);
-
-  return p;
+  return nil;
 }
