@@ -1,5 +1,0 @@
-kern/head.h
-../kern/head.h
-
-
-../kern/proc.c

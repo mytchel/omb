@@ -48,7 +48,8 @@ reg_t
 fault_addr(void);
 
 void
-intc_add_handler(uint32_t, void (*)(uint32_t));
+intc_add_handler(uint32_t irq,
+                 void (*func)(uint32_t));
 
 void
 intc_reset(void);

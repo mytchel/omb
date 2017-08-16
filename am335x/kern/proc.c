@@ -25,61 +25,19 @@
  *
  */
 
-#include <c.h>
-#include <string.h>
+#include <head.h>
+#include "fns.h"
+#include "trap.h"
 
-typedef struct proc *proc_t;
-
-typedef enum {
-	PROC_oncpu,
-	PROC_ready,
-	PROC_dead,
-} procstate_t;
-
-struct proc {
-	proc_t next;
+void
+func_label(label_t *l, reg_t stack, void (*func)(void))
+{
+	int i;
 	
-	label_t label;
-	
-	procstate_t state;
-	int pid;
-	
-	reg_t kstack;
-};
+	for (i = 0; i < sizeof(label_t); i++)
+		*(((uint8_t *) l) + i) = 0;
 
-proc_t
-proc_new(reg_t page,
-        reg_t kstack);
-
-proc_t
-find_proc(int pid);
-
-void
-schedule(void);
-
-int
-debug(const char *fmt, ...);
-
-/* Machine dependant. */
-
-void
-puts(const char *c);
-
-void
-set_systick(uint32_t ms);
-
-intr_t
-set_intr(intr_t i);
-
-int
-set_label(label_t *l);
-
-void
-func_label(label_t *l, reg_t stack_top, void (*func)(void));
-
-int
-goto_label(label_t *l) __attribute__((noreturn));
-
-/* Variables. */
-
-proc_t up;
+	l->psr = MODE_SVC;
+	l->sp = (uint32_t) stack + PAGE_SIZE;
+	l->pc = (uint32_t) func;
+}

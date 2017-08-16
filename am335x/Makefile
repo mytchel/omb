@@ -74,8 +74,8 @@ KSRC_C := \
         kern/trap.c               \
         kern/timer.c              \
         kern/mem.c                \
+        kern/proc.c               \
         kern/uart.c               \
-        kern/proc0.c              \
         ../kern/util.c            \
         ../kern/proc.c            \
         ../lib/libstring/conv.c   \

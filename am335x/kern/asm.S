@@ -1,5 +1,5 @@
 #
-#  Copyright (c) 2017 Mytchel Hammond <mytchel@openmailbox.org>
+#  Copyright (c) 2017 Mytchel Hammond <mytch@lackname.org>
 #  
 #  Permission is hereby granted, free of charge, to any person
 #  obtaining a copy of this software and associated documentation
@@ -30,9 +30,9 @@
 
 .global set_intr
 .global set_label
+.global func_label
 .global goto_label
 .global drop_to_user
-.global func_loader
 .global fsr_status
 .global fault_addr
 .global cache_disable

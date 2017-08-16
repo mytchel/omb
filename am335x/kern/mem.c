@@ -43,11 +43,10 @@
 #define L2_FAULT     0b00
 #define L2_LARGE     0b01
 #define L2_SMALL     0b10
-#define L2_TINY       0b11
+#define L2_TINY      0b11
 
 uint32_t
 ttb[4096]__attribute__((__aligned__(16*1024))) = { L1_FAULT };
-
 
 extern uint32_t *ram_start;
 extern uint32_t *ram_end;
@@ -124,5 +123,42 @@ imap(void *start, void *end, int ap, bool cachable)
     ttb[L1X(x)] = x | mask;
     x += 1 << 20;
   }
+}
+
+void
+proc0_main(void)
+{
+	uint32_t j;
+	
+	debug("proc0 started!\n");
+	while (true) {
+		for (j = 0; j < 0xfffffe; j++)
+			;
+		
+		debug("proc0 ovf\n");
+	}
+}
+
+void
+init_proc0(void)
+{
+	reg_t page, stack;
+	proc_t p;
+	
+	page = (reg_t) &ram_start;
+	stack = (reg_t) &ram_start + PAGE_SIZE;
+	
+	debug("proc0 going at 0x%h with stack at 0x%h\n", page, stack);
+	p = proc_new(page, stack);
+	if (p == nil) {
+		debug("Failed to create proc0!\n");
+		while (true)
+			;
+	}
+	
+	debug("set up for jump to main at 0x%h\n", &proc0_main);
+	func_label(&p->label, stack, &proc0_main);
+	
+	p->state = PROC_ready;	             
 }
 

@@ -39,12 +39,16 @@ static struct proc *
 next_proc(void)
 {
 	proc_t p;
-
-	p = up->next;
-	if (p == nil) {
+	
+	if (up == nil) {
 		p = procs;
+	} else {
+		p = up->next;
+		if (p == nil) {
+			p = procs;
+		}
 	}
-
+	
 	if (p->state == PROC_ready) {
 		return p;
 	} else {
@@ -57,23 +61,27 @@ schedule(void)
 {
 	debug("schedule\n");
 	
-	debug("take %i off cpu\n", up->pid);
+	if (up != nil) {
+		debug("take %i off cpu\n", up->pid);
 	
-	if (up->state == PROC_oncpu) {
-		up->state = PROC_ready;
-	}
+		if (up->state == PROC_oncpu) {
+			up->state = PROC_ready;
+		}
     
-	if (set_label(&up->label)) {
-		return;
+		if (set_label(&up->label)) {
+			return;
+		}
 	}
 	
 	up = next_proc();
 	
 	debug("put %i on cpu\n", up->pid);
 	
-	set_systick(100);
+	set_systick(1000);
 
 	up->state = PROC_oncpu;
+	
+	debug("jump to 0x%h\n", up->label.pc);
 	goto_label(&up->label);
 }
 
