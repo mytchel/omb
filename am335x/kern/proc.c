@@ -30,14 +30,14 @@
 #include "trap.h"
 
 void
-func_label(label_t *l, reg_t stack, void (*func)(void))
+proc_func(proc_t p, void (*func)(void))
 {
 	int i;
 	
 	for (i = 0; i < sizeof(label_t); i++)
-		*(((uint8_t *) l) + i) = 0;
+		*(((uint8_t *) &p->label) + i) = 0;
 
-	l->psr = MODE_SVC;
-	l->sp = (uint32_t) stack + PAGE_SIZE;
-	l->pc = (uint32_t) func;
+	p->label.psr = MODE_SVC;
+	p->label.sp = (uint32_t) p->kstack + PAGE_SIZE;
+	p->label.pc = (uint32_t) func;
 }

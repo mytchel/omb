@@ -24,27 +24,94 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  *
  */
-
+ 
 #include <head.h>
-#include "fns.h"
+
 
 int
-kmain(void)
+ksend(proc_t p,
+      void *s, 
+      void *r)
 {
-	proc_t p;
+	proc_t *pp;
+	intr_t i;
 	
-  puts("OMB Booting...\n");
-
-	init_intc();
-	init_watchdog();
-	init_timers();
-	init_memory();
+	if (p->state == PROC_dead) {
+		return ERR;
+	}
 	
-	p = init_proc0();
+	up->smessage = s;
+	up->rmessage = r;
 	
-	schedule(p);
-  
-  /* Never reached */
-  return 0;
+	up->waiting_on = p;
+	
+	do {
+		for (pp = &p->waiting; 
+		     *pp != nil;
+		     pp = &((*pp)->wnext))
+			;
+		
+	} while (!cas(pp, nil, up));	
+	
+	i = set_intr(INTR_off);
+	
+	if (p->state == PROC_recv) {
+		p->state = PROC_ready;
+		schedule(p);
+	} else {
+		schedule(nil);
+	}
+	
+	set_intr(i);
+	
+	return OK;
 }
 
+proc_t
+krecv(void *m)
+{
+	intr_t i;
+	proc_t w;
+	
+	while (true) {
+		w = up->waiting;
+	
+		if (w != nil) {
+			if (!cas(&up->waiting, w, w->wnext)) {
+				continue;
+			}
+
+			memmove(m, w->smessage, MESSAGE_LEN);
+			w->state = PROC_reply;
+			w->wnext = nil;
+			return w;
+			
+		} else {
+			i = set_intr(INTR_off);
+			up->state = PROC_recv;
+			schedule(nil);
+			set_intr(i);
+		}
+	}
+}
+
+int
+kreply(proc_t p,
+       void *m)
+{
+	intr_t i;
+	
+	if (p->state != PROC_reply || p->waiting_on != up) {
+		return ERR;
+	}
+	
+	memmove(p->rmessage, m, MESSAGE_LEN);
+	
+	i = set_intr(INTR_off);
+	p->state = PROC_ready;
+	schedule(nil);
+	set_intr(i);
+	
+	return OK;
+}
+       

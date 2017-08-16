@@ -78,6 +78,7 @@ KSRC_C := \
         kern/uart.c               \
         ../kern/util.c            \
         ../kern/proc.c            \
+        ../kern/sys.c             \
         ../lib/libstring/conv.c   \
         ../lib/libstring/scanf.c  \
         ../lib/libstring/string.c 

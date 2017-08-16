@@ -40,24 +40,22 @@ next_proc(void)
 {
 	proc_t p;
 	
-	if (up == nil) {
-		p = procs;
-	} else {
-		p = up->next;
+	p = up->next;
+	do {
 		if (p == nil) {
 			p = procs;
+		} else if (p->state == PROC_ready) {
+			return p;
+		} else {
+			p = p->next;
 		}
-	}
+	} while (p != up);
 	
-	if (p->state == PROC_ready) {
-		return p;
-	} else {
-		return next_proc();
-	}
+	return p->state == PROC_ready ? p : nil;
 }
 
 void
-schedule(void)
+schedule(proc_t n)
 {
 	debug("schedule\n");
 	
@@ -73,16 +71,26 @@ schedule(void)
 		}
 	}
 	
-	up = next_proc();
-	
-	debug("put %i on cpu\n", up->pid);
-	
+	if (n != nil) {
+		up = n;
+	} else {
+		up = next_proc();
+	}
+		
 	set_systick(1000);
 
-	up->state = PROC_oncpu;
-	
-	debug("jump to 0x%h\n", up->label.pc);
-	goto_label(&up->label);
+	if (up != nil) {
+		debug("put %i on cpu\n", up->pid);
+		
+		up->state = PROC_oncpu;
+		goto_label(&up->label);
+	} else {
+		debug("go idle\n");
+		
+		set_intr(INTR_on);
+		while (true)
+			;
+	}
 }
 
 void
@@ -137,10 +145,13 @@ proc_new(reg_t page,
 	
   p = (proc_t) page;
 
-  p->kstack = kstack;
   p->state = PROC_dead;
+  p->kstack = kstack;
 
   p->next = nil;
+  p->wnext = nil;
+  p->waiting = nil;
+  p->waiting_on = nil;
 
 	do {
 		p->pid = nextpid;

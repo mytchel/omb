@@ -44,3 +44,18 @@ debug(const char *fmt, ...)
 	
 	return i;
 }
+
+
+void
+memmove(void *dst, const void *src, size_t len)
+{
+	const uint8_t *s;
+	uint8_t *d;
+	
+	d = dst;
+	s = src;
+	
+	while (len-- > 0) {
+		*d++ = *s++;
+	}
+}

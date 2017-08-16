@@ -126,20 +126,85 @@ imap(void *start, void *end, int ap, bool cachable)
 }
 
 void
-proc0_main(void)
+proc1_main(void)
 {
-	uint32_t j;
+	char s[MESSAGE_LEN], r[MESSAGE_LEN];
+	proc_t p;
+	int i, j;
 	
-	debug("proc0 started!\n");
+	debug("proc1 started!\n");
+	
+	i = 0;
 	while (true) {
-		for (j = 0; j < 0xfffffe; j++)
-			;
+		p = find_proc(0);
+		if (p == nil) {
+			debug("couldn't find proc0\n");
+			while (true)
+				;
+		}
 		
-		debug("proc0 ovf\n");
+		snprintf(s, sizeof(s), "the count is %i", i++);
+		
+		if (ksend(p, s, r) == OK) {
+			debug("got reply '%s'\n", r);
+		} else {
+			debug("error\n");
+		}
+		
+		for (j = 0; j < 0xfffff; j++)
+			;
 	}
 }
 
 void
+init_proc1(void)
+{
+	reg_t page, stack;
+	proc_t p;
+	
+	page = (reg_t) &ram_start + PAGE_SIZE;
+	stack = (reg_t) &ram_start + PAGE_SIZE * 2;
+	
+	p = proc_new(page, stack);
+	if (p == nil) {
+		debug("Failed to create proc1!\n");
+		while (true)
+			;
+	}
+	
+	proc_func(p, &proc1_main);
+	
+	p->state = PROC_ready;	             
+}
+
+void
+proc0_main(void)
+{
+	char m[MESSAGE_LEN];
+	proc_t p;
+		
+	debug("proc0 started!\n");
+	init_proc1();
+	
+	debug("proc0 looping\n");
+	while (true) {
+		p = krecv(m);
+		if (p == nil) {
+			debug("umm\n");
+			continue;
+		}
+		
+		debug("got message '%s' from %i\n", m, p->pid);
+		
+		snprintf(m, sizeof(m), "Hello %i!", p->pid);
+		
+		if (kreply(p, m) != OK) {
+			debug("problem sending reply!\n");
+		}
+	}
+}
+
+proc_t
 init_proc0(void)
 {
 	reg_t page, stack;
@@ -148,7 +213,6 @@ init_proc0(void)
 	page = (reg_t) &ram_start;
 	stack = (reg_t) &ram_start + PAGE_SIZE;
 	
-	debug("proc0 going at 0x%h with stack at 0x%h\n", page, stack);
 	p = proc_new(page, stack);
 	if (p == nil) {
 		debug("Failed to create proc0!\n");
@@ -156,9 +220,9 @@ init_proc0(void)
 			;
 	}
 	
-	debug("set up for jump to main at 0x%h\n", &proc0_main);
-	func_label(&p->label, stack, &proc0_main);
+	proc_func(p, &proc0_main);
 	
-	p->state = PROC_ready;	             
+	p->state = PROC_ready;
+	
+	return p;
 }
-

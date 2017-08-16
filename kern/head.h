@@ -34,17 +34,26 @@ typedef enum {
 	PROC_oncpu,
 	PROC_ready,
 	PROC_dead,
+	PROC_send,
+	PROC_reply,
+	PROC_recv,
+	PROC_recving,
 } procstate_t;
 
 struct proc {
-	proc_t next;
-	
 	label_t label;
 	
 	procstate_t state;
 	int pid;
 	
 	reg_t kstack;
+	
+	void *smessage, *rmessage;
+	proc_t waiting;
+	proc_t waiting_on;
+	
+	proc_t next;
+	proc_t wnext;
 };
 
 proc_t
@@ -55,10 +64,25 @@ proc_t
 find_proc(int pid);
 
 void
-schedule(void);
+schedule(proc_t next);
+
+int
+ksend(proc_t p,
+      void *s, 
+      void *r);
+
+proc_t
+krecv(void *m);
+
+int
+kreply(proc_t p,
+       void *m);
 
 int
 debug(const char *fmt, ...);
+
+void
+memmove(void *dst, const void *src, size_t len);
 
 /* Machine dependant. */
 
@@ -75,7 +99,7 @@ int
 set_label(label_t *l);
 
 void
-func_label(label_t *l, reg_t stack_top, void (*func)(void));
+proc_func(proc_t p, void (*func)(void));
 
 int
 goto_label(label_t *l) __attribute__((noreturn));

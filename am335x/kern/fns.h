@@ -83,7 +83,7 @@ init_watchdog(void);
 void
 init_timers(void);
 
-void
+proc_t
 init_proc0(void);
 
 #endif

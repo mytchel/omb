@@ -140,7 +140,7 @@ systick_handler(uint32_t irqn)
 
   intc_reset();
   
-  schedule();
+  schedule(nil);
 }
 
 uint32_t
