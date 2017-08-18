@@ -83,6 +83,7 @@ schedule(proc_t n)
 		debug("put %i on cpu\n", up->pid);
 		
 		up->state = PROC_oncpu;
+		mmu_switch(up->space);
 		goto_label(&up->label);
 	} else {
 		debug("go idle\n");
@@ -139,7 +140,8 @@ remove_from_list(proc_t *l, proc_t p)
 	
 proc_t
 proc_new(reg_t page, 
-        reg_t kstack)
+         reg_t kstack,
+         space_t space)
 {
   proc_t p;
 	
@@ -147,6 +149,7 @@ proc_new(reg_t page,
 
   p->state = PROC_dead;
   p->kstack = kstack;
+  p->space = space;
 
   p->next = nil;
   p->wnext = nil;

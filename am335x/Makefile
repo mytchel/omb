@@ -63,6 +63,23 @@ all: am335x.list am335x.umg
 
 CLEAN += am335x.umg am335x.list init.list
 
+ISRC_A := \
+        ../lib/libc/sys.S
+
+ISRC_C := \
+				init/main.c               \
+        ../lib/libc/util.c        \
+        ../lib/libstring/conv.c   \
+        ../lib/libstring/scanf.c  \
+        ../lib/libstring/string.c
+				
+
+IOBJECTS := \
+	$(ISRC_A:%.S=%.o) \
+	$(ISRC_C:%.c=%.o)
+
+CLEAN += $(IOBJECTS)
+
 
 KSRC_A := \
         kern/vectors.S          \
@@ -75,13 +92,14 @@ KSRC_C := \
         kern/timer.c              \
         kern/mem.c                \
         kern/proc.c               \
+        kern/proc0.c              \
         kern/uart.c               \
-        ../kern/util.c            \
         ../kern/proc.c            \
         ../kern/sys.c             \
         ../lib/libstring/conv.c   \
         ../lib/libstring/scanf.c  \
-        ../lib/libstring/string.c 
+        ../lib/libstring/string.c \
+        ../lib/libc/util.c
 
 
 KOBJECTS := \
@@ -108,11 +126,27 @@ CLEAN += $(KOBJECTS)
 	$(OBJDUMP) -S $< > $@
 
 
+init.elf: init/init.ld $(IOBJECTS)
+	$(LD) $(LDFLAGS) \
+		-T init/init.ld -Ttext 0x1000 \
+		-o $@ $(IOBJECTS) \
+		-lgcc
+		
+
+CLEAN += init.o init.bin init.elf
+init.o: init.elf
+	$(OBJCOPY) --rename-section .text=.init_text \
+	           --rename-section .data=.init_data \
+	           --rename-section .bss=.init_bss \
+	           -x -X -S \
+	            $> $@
+	
+
 CLEAN += $(TARGET).elf $(TARGET).list
-am335x.elf: kern/kernel.ld $(KOBJECTS)
+am335x.elf: kern/kernel.ld init.o $(KOBJECTS)
 	$(LD) $(LDFLAGS) \
 		-T kern/kernel.ld -Ttext $(loadaddr) \
-		-o $@ $(KOBJECTS) \
+		-o $@ $(KOBJECTS) init.o \
 		-lgcc
 
 

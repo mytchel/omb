@@ -39,21 +39,21 @@
    Returns an error or 0. */
 int
 send(int pid, 
-     uint8_t *s, 
-     uint8_t *r);
+     void *s, 
+     void *r);
 
 
 /* Recieve a message into m and return the pid of the sender
    or error. */
 int
-recv(uint8_t *m);
+recv(void *m);
 
 
 /* Reply to a message from pid.
    Returns an error or 0. */
 int
 reply(int pid, 
-      uint8_t *m);
+      void *m);
 
 
 bool
@@ -65,5 +65,12 @@ cas(void *addr, void *old, void *new);
 
 #define STATIC_ASSERT(COND, MSG) \
   typedef char static_assertion_##MSG[(COND)?1:-1]
+
+
+void
+memmove(void *dst, const void *src, size_t len);
+
+void
+memset(void *dst, uint8_t v, size_t len);
 
 #endif

@@ -3,11 +3,11 @@ ENTRY(_kstart);
 SECTIONS
 {
 	. = 0x80000000;
-	ram_start = .;
+	_ram_start = .;
 
 	.text ALIGN(4096) :
 	{
-		kernel_start = .;
+		_kernel_start = .;
 		*(.text)
 	}
 	
@@ -25,19 +25,31 @@ SECTIONS
 	
 	.bss ALIGN(4096) : 
 	{
-		kernel_bss_start = .;
+		_kernel_bss_start = .;
 		*(.bss)
 		*(.bss.*)
-		kernel_bss_end = .;
+		_kernel_bss_end = .;
 	}
-
+	
+	.init ALIGN(4096) :
+	{
+		_init_start = .;
+		. = ALIGN(4096);
+		*(.init_text)
+		. = ALIGN(4096);
+		*(.init_data)
+		. = ALIGN(4096);
+		*(.init_bss)
+		_init_end = .;
+	}
+	
 	. = ALIGN(4096);
 
 	. = . + 0x100;
-	ex_stack_top = .;
+	_ex_stack_top = .;
 
-	kernel_end = .;
+	_kernel_end = .;
 
 	. = 0xa0000000;
-	ram_end = .;
+	_ram_end = .;
 }

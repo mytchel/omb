@@ -69,6 +69,12 @@ imap(void *, void *, int, bool);
 void
 mmu_load_ttb(uint32_t *);
 
+void *
+get_io_page(reg_t addr);
+
+void *
+get_ram_page(void);
+
 /* Initialisation functions */
 
 void

@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2017 Mytchel Hammond <mytchel@openmailbox.org>
+ * Copyright (c) 2017 Mytchel Hammond <mytch@lackname.org>
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -28,19 +28,10 @@
 #ifndef _SYSCALLS_H_
 #define _SYSCALLS_H_
 
-#define SYSCALL_EXIT            1
-#define SYSCALL_FORK            2
-#define SYSCALL_GETPID          3 
+#define SYSCALL_SEND            0
+#define SYSCALL_RECV            1
+#define SYSCALL_REPLY           2
 
-#define SYSCALL_SENDNB          4 
-#define SYSCALL_SEND            5 
-#define SYSCALL_RECVNB          6 
-#define SYSCALL_RECV            7
-
-#define SYSCALL_MGRANT          8
-#define SYSCALL_MGRANTNB        9
-#define SYSCALL_MMAP           10
-
-#define NSYSCALLS              11
+#define NSYSCALLS               3
 
 #endif

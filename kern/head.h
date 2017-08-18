@@ -26,6 +26,7 @@
  */
 
 #include <c.h>
+#include <syscalls.h>
 #include <string.h>
 
 typedef struct proc *proc_t;
@@ -52,13 +53,16 @@ struct proc {
 	proc_t waiting;
 	proc_t waiting_on;
 	
+	space_t space;
+	
 	proc_t next;
 	proc_t wnext;
 };
 
 proc_t
 proc_new(reg_t page,
-        reg_t kstack);
+         reg_t kstack,
+         space_t space);
 
 proc_t
 find_proc(int pid);
@@ -78,16 +82,11 @@ int
 kreply(proc_t p,
        void *m);
 
-int
-debug(const char *fmt, ...);
-
-void
-memmove(void *dst, const void *src, size_t len);
 
 /* Machine dependant. */
 
-void
-puts(const char *c);
+int
+debug(const char *fmt, ...);
 
 void
 set_systick(uint32_t ms);
@@ -98,11 +97,26 @@ set_intr(intr_t i);
 int
 set_label(label_t *l);
 
+int
+goto_label(label_t *l) __attribute__((noreturn));
+
+void
+drop_to_user(label_t *l, void *kstack_top) __attribute__((noreturn));
+
 void
 proc_func(proc_t p, void (*func)(void));
 
-int
-goto_label(label_t *l) __attribute__((noreturn));
+space_t
+space_new(reg_t page);
+
+bool
+mapping_add(space_t s, reg_t pa, reg_t va);
+
+void
+mmu_switch(space_t s);
+
+void *
+kernel_addr(space_t s, reg_t addr, size_t len);
 
 /* Variables. */
 

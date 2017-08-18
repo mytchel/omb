@@ -27,7 +27,6 @@
  
 #include <head.h>
 
-
 int
 ksend(proc_t p,
       void *s, 
@@ -109,9 +108,86 @@ kreply(proc_t p,
 	
 	i = set_intr(INTR_off);
 	p->state = PROC_ready;
-	schedule(nil);
+	schedule(p);
 	set_intr(i);
 	
 	return OK;
 }
-       
+
+reg_t
+syssend(int pid, void *s, void *r)
+{
+	void *ks, *kr;
+	proc_t p;
+	
+	debug("syssend from %i to %i with 0x%h and 0x%h\n",
+	      up->pid, pid, s, r);
+	      
+	debug("sending data user   '%s'\n", s);
+	
+	p = find_proc(pid);
+	if (p == nil) {
+		return ERR;
+	}
+	
+	ks = kernel_addr(up->space, (reg_t) s, 
+	                 MESSAGE_LEN);
+	
+	kr = kernel_addr(up->space, (reg_t) r, 
+	                 MESSAGE_LEN);
+	
+	if (ks == nil || kr == nil) {  
+		return ERR;
+	}
+		return ksend(p, ks, kr);
+}
+
+reg_t
+sysrecv(void *m)
+{
+	proc_t p;
+	void *km;
+	
+	km = kernel_addr(up->space, (reg_t) m, 
+	                 MESSAGE_LEN);
+	
+	if (km == nil) {  
+		return ERR;
+	}
+	
+	p = krecv(km);
+	if (p == nil) {
+		return ERR;
+	} else {
+		return p->pid;
+	}
+}
+
+reg_t
+sysreply(int pid, 
+         void *m)
+{
+	void *km;
+	proc_t p;
+	
+	p = find_proc(pid);
+	if (p == nil) {
+		return ERR;
+	}
+		
+	km = kernel_addr(up->space, (reg_t) m, 
+	                 MESSAGE_LEN);
+	
+	if (km == nil) {  
+		return ERR;
+	}
+	
+	return kreply(p, km);
+}
+
+void *systab[NSYSCALLS] = {
+	[SYSCALL_SEND]        = (void *) &syssend,
+	[SYSCALL_RECV]        = (void *) &sysrecv,
+	[SYSCALL_REPLY]       = (void *) &sysreply,
+};
+	

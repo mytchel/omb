@@ -1,5 +1,5 @@
 #
-#  Copyright (c) 2017 Mytchel Hammond <mytchel@openmailbox.org>
+#  Copyright (c) 2017 Mytchel Hammond <mytch@lackname.org>
 #  
 #  Permission is hereby granted, free of charge, to any person
 #  obtaining a copy of this software and associated documentation
@@ -31,8 +31,8 @@
 .global _kstart
 
 _kstart:
-	ldr r0, = kernel_bss_start
-	ldr r1, = kernel_bss_end
+	ldr r0, = _kernel_bss_start
+	ldr r1, = _kernel_bss_end
 	mov r2, #0
 	mov r3, #0
 1:
@@ -48,13 +48,13 @@ _kstart:
 	mcr p15, 0, r0, c1, c0, 0
 	
 	cps #MODE_IRQ
-	ldr sp, =ex_stack_top
+	ldr sp, =_ex_stack_top
 	cps #MODE_ABORT
-	ldr sp, =ex_stack_top
+	ldr sp, =_ex_stack_top
 	cps #MODE_UND
-	ldr sp, =ex_stack_top
+	ldr sp, =_ex_stack_top
 	cps #MODE_SVC
-	ldr sp, =ex_stack_top
+	ldr sp, =_ex_stack_top
 	
 	bl vector_table_init
 
@@ -87,37 +87,35 @@ vector_table:
 
 
 swi_ex:
-	mov pc, lr
-#
-#	cmp r12, #NSYSCALLS
-#	movpls pc, lr
+	cmp r12, #NSYSCALLS
+	movpls pc, lr
 	
-#	stmfd sp!, {r9, r10, r11, lr}
+	stmfd sp!, {r9, r10, r11, lr}
 
-#	mrs r9, spsr
+	mrs r9, spsr
 
-#	cpsid if, #MODE_SYS
+	cpsid if, #MODE_SYS
 
-#	mov r10, sp
-#	mov r11, lr
+	mov r10, sp
+	mov r11, lr
 	
-#	cpsie if, #MODE_SVC
+	cpsie if, #MODE_SVC
 	
-#	ldr lr, =systab
-#	add r12, lr, r12, lsl #2
-#	ldr lr, =1f
-#	ldr pc, [r12]
+	ldr lr, =systab
+	add r12, lr, r12, lsl #2
+	ldr lr, =1f
+	ldr pc, [r12]
 	
-#1:
-#	cpsid if, #MODE_SYS
+1:
+	cpsid if, #MODE_SYS
 
-#	mov sp, r10
-#	mov lr, r11
+	mov sp, r10
+	mov lr, r11
 	
-#	cpsid if, #MODE_SVC
+	cpsid if, #MODE_SVC
 
-#	msr spsr, r9
-#	ldmfd sp!, {r9, r10, r11, pc}^
+	msr spsr, r9
+	ldmfd sp!, {r9, r10, r11, pc}^
 
 	
 irq_ex:

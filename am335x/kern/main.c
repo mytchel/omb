@@ -33,7 +33,7 @@ kmain(void)
 {
 	proc_t p;
 	
-  puts("OMB Booting...\n");
+  debug("OMB Booting...\n");
 
 	init_intc();
 	init_watchdog();

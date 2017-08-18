@@ -28,10 +28,10 @@
 #include <head.h>
 #include "fns.h"
 
-#define L1X(va)          (va >> 20)
-#define L2X(va)          ((va >> 12) & ((1 << 8) - 1))
-#define PAL1(entry)      (entry & 0xffffffc00)
-#define PAL2(entry)      (entry & 0xffffff000)
+#define L1X(va)          ((va) >> 20)
+#define L2X(va)          (((va) >> 12) & ((1 << 8) - 1))
+#define PAL1(entry)      ((entry) & 0xffffffc00)
+#define PAL2(entry)      ((entry) & 0xffffff000)
 
 #define L1_TYPE      0b11
 #define L1_FAULT     0b00
@@ -45,44 +45,142 @@
 #define L2_SMALL     0b10
 #define L2_TINY      0b11
 
+typedef enum {
+	ADDR_ram,
+	ADDR_io,
+} addr_t;
+
+struct addr {
+	reg_t start;
+	size_t len;
+	addr_t type;
+};
+
+struct addr_holder {
+	struct addr_holder *next;
+	size_t len, n;
+	struct addr addrs[];
+};
+
 uint32_t
 ttb[4096]__attribute__((__aligned__(16*1024))) = { L1_FAULT };
 
-extern uint32_t *ram_start;
-extern uint32_t *ram_end;
-extern uint32_t *kernel_start;
-extern uint32_t *kernel_end;
+extern uint32_t *_ram_start;
+extern uint32_t *_ram_end;
+extern uint32_t *_kernel_start;
+extern uint32_t *_kernel_end;
+
+static struct addr_holder *addrs;
+
+static space_t space = nil;
+
+void *
+get_ram_page(void)
+{
+	struct addr_holder *a;
+	size_t i;
+	
+	for (a = addrs; a != nil; a = a->next) {
+		for (i = 0; i < a->n; i++) {
+			if (a->addrs[i].len > 0 && a->addrs[i].type == ADDR_ram) {
+				a->addrs[i].len -= PAGE_SIZE;
+				return (void *) (a->addrs[i].start + a->addrs[i].len);
+			}
+		}
+	}
+	
+	return nil;
+}
+
+static void
+add_addr(reg_t start, reg_t end, addr_t type)
+{
+	struct addr_holder *h;
+
+	if (addrs->n == addrs->len) {
+		h = (struct addr_holder *) get_ram_page();
+		h->next = addrs;
+		addrs = h;
+			
+		addrs->n = 0;
+		addrs->len = (PAGE_SIZE - sizeof(struct addr_holder))
+		                / sizeof(struct addr);
+		                
+		memset(addrs->addrs, 0, sizeof(struct addr) * addrs->len);
+	}
+	
+	addrs->addrs[addrs->n].start = start;
+	addrs->addrs[addrs->n].len = end - start;
+	addrs->addrs[addrs->n].type = type;
+	addrs->n++;
+}
+
+void *
+get_io_page(reg_t addr)
+{
+	struct addr_holder *a;
+	size_t i;
+	
+	for (a = addrs; a != nil; a = a->next) {
+		for (i = 0; i < a->n; i++) {
+			if (a->addrs[i].type == ADDR_io &&
+			    a->addrs[i].start <= addr &&
+			    a->addrs[i].start + a->addrs[i].len > addr) {
+			  
+			  if (a->addrs[i].start + a->addrs[i].len > addr + PAGE_SIZE) {
+			  	/* Add another spot for remainder of chunk. */
+			  	add_addr(addr + PAGE_SIZE, 
+			  	         a->addrs[i].start + a->addrs[i].len,
+			  	         ADDR_io);
+			  }
+			  
+			  /* Shrink chunk. */
+			  a->addrs[i].len = addr - a->addrs[i].start;
+			  				
+				return (void *) addr;
+			}
+		}
+	}
+	
+	return nil;
+}
 
 void
 init_memory(void)
 {
   int i;
   
-#if 0
-  addrampages(PAGE_ALIGN((uint32_t) &kernel_end + PAGE_SIZE - 1),
-	      (uint32_t) &ram_end);
+  addrs = (struct addr_holder *)
+      PAGE_ALIGN((uint32_t) &_kernel_end + PAGE_SIZE - 1);
+	addrs->next = nil;
+			
+	addrs->n = 0;
+	addrs->len = (PAGE_SIZE - sizeof(struct addr_holder))
+	                / sizeof(struct addr);
+		
+  add_addr((reg_t) addrs + PAGE_SIZE, 
+           (uint32_t) &_ram_end,
+           ADDR_ram);
   
-  addrampages((uint32_t) &ram_start,
-	      PAGE_ALIGN((uint32_t) &kernel_start));
+  add_addr((uint32_t) &_ram_start,
+	         PAGE_ALIGN((uint32_t) &_kernel_start),
+	         ADDR_ram);
 
-  addiopages(0x47400000, 0x47404000); /* USB */
-  addiopages(0x44E31000, 0x44E32000); /* DMTimer1 */
-  addiopages(0x48042000, 0x48043000); /* DMTIMER3 */
-  addiopages(0x44E09000, 0x44E0A000); /* UART0 */
-  addiopages(0x48022000, 0x48023000); /* UART1 */
-  addiopages(0x48024000, 0x48025000); /* UART2 */
-  addiopages(0x44E07000, 0x44E08000); /* GPIO0 */
-  addiopages(0x4804c000, 0x4804d000); /* GPIO1 */
-  addiopages(0x481ac000, 0x481ad000); /* GPIO2 */
-  addiopages(0x481AE000, 0x481AF000); /* GPIO3 */
-  addiopages(0x48060000, 0x48061000); /* MMCHS0 */
-  addiopages(0x481D8000, 0x481D9000); /* MMC1 */
-  addiopages(0x47810000, 0x47820000); /* MMCHS2 */
-  addiopages(0x44E35000, 0x44E36000); /* Watchdog */
-  addiopages(0x44E05000, 0x44E06000); /* DMTimer0 */
-  addiopages(0x48040000, 0x48041000); /* DMTIMER2 */
-
-#endif
+  add_addr(0x47400000, 0x47404000, ADDR_io); /* USB */
+  add_addr(0x44E31000, 0x44E32000, ADDR_io); /* DMTimer1 */
+  add_addr(0x48042000, 0x48043000, ADDR_io); /* DMTIMER3 */
+  add_addr(0x44E09000, 0x44E0A000, ADDR_io); /* UART0 */
+  add_addr(0x48022000, 0x48023000, ADDR_io); /* UART1 */
+  add_addr(0x48024000, 0x48025000, ADDR_io); /* UART2 */
+  add_addr(0x44E07000, 0x44E08000, ADDR_io); /* GPIO0 */
+  add_addr(0x4804c000, 0x4804d000, ADDR_io); /* GPIO1 */
+  add_addr(0x481ac000, 0x481ad000, ADDR_io); /* GPIO2 */
+  add_addr(0x481AE000, 0x481AF000, ADDR_io); /* GPIO3 */
+  add_addr(0x48060000, 0x48061000, ADDR_io); /* MMCHS0 */
+  add_addr(0x481D8000, 0x481D9000, ADDR_io); /* MMC1 */
+  add_addr(0x47810000, 0x47820000, ADDR_io); /* MMCHS2 */
+  add_addr(0x44E35000, 0x44E36000, ADDR_io); /* Watchdog */
+  add_addr(0x44E05000, 0x44E06000, ADDR_io); /* DMTimer0 */
 
   for (i = 0; i < 4096; i++)
     ttb[i] = L1_FAULT;
@@ -90,13 +188,13 @@ init_memory(void)
   mmu_load_ttb(ttb);
 
   /* Give kernel unmapped access to all of ram. */	
-  imap(&ram_start, &ram_end, AP_RW_NO, true);
+  imap(&_ram_start, &_ram_end, AP_RW_NO, true);
 
-  /* UART0, given to both kernel and possibly users. This may change */
+  /* UART0, given to both kernel and possibly user. This may change */
   imap((void *) 0x44E09000, (void *) 0x44E0A000, AP_RW_NO, false);
   /* Watchdog */
   imap((void *) 0x44E35000, (void *) 0x44E36000, AP_RW_NO, false);
-  /* DMTIMER2 */
+  /* DMTIMER2 for systick. */
   imap((void *) 0x48040000, (void *) 0x48041000, AP_RW_NO, false);
   /* INTCPS */
   imap((void *) 0x48200000, (void *) 0x48201000, AP_RW_NO, false);
@@ -125,104 +223,186 @@ imap(void *start, void *end, int ap, bool cachable)
   }
 }
 
-void
-proc1_main(void)
+static void
+mmu_empty(void)
 {
-	char s[MESSAGE_LEN], r[MESSAGE_LEN];
-	proc_t p;
-	int i, j;
+	space_t s;
+	int i;
 	
-	debug("proc1 started!\n");
+	if (space == nil) {
+		return;
+	}
 	
-	i = 0;
-	while (true) {
-		p = find_proc(0);
-		if (p == nil) {
-			debug("couldn't find proc0\n");
-			while (true)
-				;
+	for (s = space; s != nil; s = s->next) {
+		for (i = 0; i < s->l2len; i++) {
+			if (s->l2[i].tab != nil) {
+				ttb[s->l2[i].va] = L1_FAULT;
+			} else {
+				break;
+			}
 		}
-		
-		snprintf(s, sizeof(s), "the count is %i", i++);
-		
-		if (ksend(p, s, r) == OK) {
-			debug("got reply '%s'\n", r);
+	}
+	
+	space = nil;
+	mmu_invalidate();
+}
+
+static void
+mmu_switch_l2(struct l2 *l2, size_t len)
+{
+	int i;
+	
+	for (i = 0; i < len; i++, l2++) {
+		if (l2->tab != nil) {
+			ttb[l2->va] = (uint32_t) l2->tab | L1_COARSE;
 		} else {
-			debug("error\n");
+			break;
 		}
-		
-		for (j = 0; j < 0xfffff; j++)
-			;
 	}
 }
 
 void
-init_proc1(void)
+mmu_switch(space_t s)
 {
-	reg_t page, stack;
-	proc_t p;
-	
-	page = (reg_t) &ram_start + PAGE_SIZE;
-	stack = (reg_t) &ram_start + PAGE_SIZE * 2;
-	
-	p = proc_new(page, stack);
-	if (p == nil) {
-		debug("Failed to create proc1!\n");
-		while (true)
-			;
+	if (space == s) {
+		return;
+	} else {
+		mmu_empty();
+		space = s;
 	}
 	
-	proc_func(p, &proc1_main);
-	
-	p->state = PROC_ready;	             
-}
-
-void
-proc0_main(void)
-{
-	char m[MESSAGE_LEN];
-	proc_t p;
-		
-	debug("proc0 started!\n");
-	init_proc1();
-	
-	debug("proc0 looping\n");
-	while (true) {
-		p = krecv(m);
-		if (p == nil) {
-			debug("umm\n");
-			continue;
-		}
-		
-		debug("got message '%s' from %i\n", m, p->pid);
-		
-		snprintf(m, sizeof(m), "Hello %i!", p->pid);
-		
-		if (kreply(p, m) != OK) {
-			debug("problem sending reply!\n");
-		}
+	while (s != nil) {
+		mmu_switch_l2(s->l2, s->l2len);
+		s = s->next;
 	}
 }
 
-proc_t
-init_proc0(void)
+space_t
+space_new(reg_t page)
 {
-	reg_t page, stack;
-	proc_t p;
+	space_t s = (space_t) page;
 	
-	page = (reg_t) &ram_start;
-	stack = (reg_t) &ram_start + PAGE_SIZE;
+	s->next = nil;
+	s->l2len = (PAGE_SIZE - sizeof(*s)) / sizeof(struct l2);
 	
-	p = proc_new(page, stack);
-	if (p == nil) {
-		debug("Failed to create proc0!\n");
-		while (true)
-			;
+	memset(s->l2, 0, sizeof(struct l2) * s->l2len);
+	
+	return s;
+}
+
+static struct l2 *
+l2_init(struct space *s, struct l2 *l2, reg_t l1)
+{
+	uint32_t *tab;
+	
+	tab = get_ram_page();
+	if (tab == nil) {
+		return nil;
 	}
 	
-	proc_func(p, &proc0_main);
+	l2->va = l1;
+	l2->tab = tab;
 	
-	p->state = PROC_ready;
+	memset(l2->tab, 0, PAGE_SIZE);
 	
-	return p;
+	if (space == s) {
+		ttb[l1] = (uint32_t) l2->tab | L1_COARSE;
+	}
+	
+	return l2;
 }
+
+static struct l2 *
+get_l2(space_t s, uint32_t l1, bool add)
+{
+	space_t ss;
+	reg_t page;
+	size_t i;
+	
+	for (ss = s; ss != nil; ss = ss->next) {
+		for (i = 0; i < ss->l2len; i++) {
+			if (ss->l2[i].tab == nil) {
+				return add ? l2_init(ss, &ss->l2[i], l1) : nil;
+			} else if (ss->l2[i].va == l1) {
+				return &ss->l2[i];
+			}
+		}		
+	}
+	
+	if (!add) {
+		return nil;
+	}
+	
+	page = (reg_t) get_ram_page();
+	if (page == nil) {
+		return nil;
+	}
+	
+	ss = space_new(page);
+	if (ss == nil) {
+		return nil;
+	}
+	
+	ss->next = s->next;
+	s->next = ss;
+	
+	return l2_init(s, &ss->l2[0], l1);
+}
+
+bool
+mapping_add(space_t s, reg_t pa, reg_t va)
+{
+	uint32_t tex, ap, c, b;
+	struct l2 *l2;
+	
+	l2 = get_l2(s, L1X(va), true);
+	if (l2 == nil) {
+		return false;
+	}
+	
+	/* Read writeable, no caching. */
+	
+	ap = AP_RW_RW;
+	tex = 0;
+	c = 0;
+	b = 1;
+	
+	l2->tab[L2X(va)] = pa | L2_SMALL |
+	    (tex << 6) | (ap << 4) | (c << 3) | (b << 2);
+	
+	return true;
+}
+
+void *
+kernel_addr(space_t s, reg_t addr, size_t len)
+{
+	reg_t va, pa, off;
+	struct l2 *l2;
+	size_t l;
+	
+	va = addr & PAGE_MASK;
+	off = addr - va;
+	
+	pa = 0;
+	for (l = 0; l < off + len; l += PAGE_SIZE) {
+		debug("kernel addr for 0x%h\n", va);
+			
+		l2 = get_l2(s, L1X(va + l), true);
+		if (l2 == nil) {
+			return nil;
+		}
+	
+		debug("l2 = 0x%h\n", l2->tab[L2X(va + l)]);
+		
+		if (l2->tab[L2X(va)] == L2_FAULT) {
+			return nil;
+			
+		} else if (l == 0) {
+			pa = (l2->tab[L2X(va)] & PAGE_MASK)
+			    + off;
+		}		
+	}
+	
+	return (void *) pa;
+}
+

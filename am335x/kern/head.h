@@ -37,4 +37,17 @@ typedef enum {
   INTR_off = (uint32_t) MODE_DI,
 } intr_t;
 
+typedef struct space *space_t;
+
+struct l2 {
+	uint32_t va;
+	uint32_t *tab;
+};
+
+struct space {
+	space_t next;
+	size_t l2len;
+	struct l2 l2[];
+};
+
 #include "../../kern/head.h"
