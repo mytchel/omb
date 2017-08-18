@@ -23,14 +23,6 @@ SECTIONS
 		*(.data.*)
 	}
 	
-	.bss ALIGN(4096) : 
-	{
-		_kernel_bss_start = .;
-		*(.bss)
-		*(.bss.*)
-		_kernel_bss_end = .;
-	}
-	
 	.init ALIGN(4096) :
 	{
 		_init_start = .;
@@ -42,7 +34,14 @@ SECTIONS
 		*(.init_bss)
 		_init_end = .;
 	}
-	
+		
+	.bss ALIGN(4096) : 
+	{
+		_kernel_bss_start = .;
+		*(.bss)
+		*(.bss.*)
+		_kernel_bss_end = .;
+	}
 	. = ALIGN(4096);
 
 	. = . + 0x100;

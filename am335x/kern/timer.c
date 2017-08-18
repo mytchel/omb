@@ -108,7 +108,7 @@ void
 init_watchdog(void)
 {
   /* Disable watchdog timer. */
-
+  
 	wdt->wspr = 0x0000AAAA;
   while (wdt->wwps & (1<<4))
     ;
@@ -135,8 +135,6 @@ systick_handler(uint32_t irqn)
 {
   /* Clear irq status if it is set. */
   timer2->irqstatus = 1<<1;
-
-	debug("got systick\n");
 
   intc_reset();
   

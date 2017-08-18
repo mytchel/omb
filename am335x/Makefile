@@ -41,7 +41,7 @@ CFLAGS = -std=c89 -O3 \
 	-Wall -Werror \
 	-mcpu=cortex-a8 \
 	-nostdinc -ffreestanding \
-	-Iinclude -I../include -Ikern/.
+	-Iinclude -I../include -Ikern/
 
 LDFLAGS = -nostdlib -nodefaultlibs -static \
 	-L/usr/local/lib/gcc/arm-none-eabi/6.3.1/

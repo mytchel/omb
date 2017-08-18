@@ -35,24 +35,17 @@
 
 #define MESSAGE_LEN 64
 
-/* Sends the message s to pid and puts the reply in r.
-   Returns an error or 0. */
 int
 send(int pid, 
      void *s, 
      void *r);
 
-
-/* Recieve a message into m and return the pid of the sender
-   or error. */
 int
 recv(void *m);
 
-
-/* Reply to a message from pid.
-   Returns an error or 0. */
 int
-reply(int pid, 
+reply(int pid,
+      int ret, 
       void *m);
 
 

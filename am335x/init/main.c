@@ -26,21 +26,26 @@
  */
 
 #include <c.h>
+#include <sys.h>
 #include <string.h>
 
 int
 main(void)
 {
-	char s[MESSAGE_LEN] = "Hi", r[MESSAGE_LEN];
-	int i, j;
+	char s[MESSAGE_LEN], r[MESSAGE_LEN];
+	memory_resp_t resp = (memory_resp_t) r;
+	memory_req_t req = (memory_req_t) s;
 	
-	i = 0;
-	while (true) {
-		snprintf(s, sizeof(s), "The count is %i", i++);
-		send(0, s, r);
+	req->type = MESSAGE_memory;
+	req->from = nil;
+	req->va = nil;
 	
-		for (j = 0; j < 0xfffff; j++)
+	if (send(0, req, resp) != OK) {
+		while (true)
 			;
 	}
+	
+	while (true)
+		;
 }
 

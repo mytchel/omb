@@ -57,11 +57,7 @@ next_proc(void)
 void
 schedule(proc_t n)
 {
-	debug("schedule\n");
-	
 	if (up != nil) {
-		debug("take %i off cpu\n", up->pid);
-	
 		if (up->state == PROC_oncpu) {
 			up->state = PROC_ready;
 		}
@@ -80,14 +76,10 @@ schedule(proc_t n)
 	set_systick(1000);
 
 	if (up != nil) {
-		debug("put %i on cpu\n", up->pid);
-		
 		up->state = PROC_oncpu;
 		mmu_switch(up->space);
 		goto_label(&up->label);
 	} else {
-		debug("go idle\n");
-		
 		set_intr(INTR_on);
 		while (true)
 			;

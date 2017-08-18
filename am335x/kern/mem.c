@@ -385,14 +385,10 @@ kernel_addr(space_t s, reg_t addr, size_t len)
 	
 	pa = 0;
 	for (l = 0; l < off + len; l += PAGE_SIZE) {
-		debug("kernel addr for 0x%h\n", va);
-			
 		l2 = get_l2(s, L1X(va + l), true);
 		if (l2 == nil) {
 			return nil;
 		}
-	
-		debug("l2 = 0x%h\n", l2->tab[L2X(va + l)]);
 		
 		if (l2->tab[L2X(va)] == L2_FAULT) {
 			return nil;

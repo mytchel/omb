@@ -26,10 +26,15 @@
  */
 
 #include <head.h>
+#include <sys.h>
 #include "fns.h"
 
 extern uint32_t *_init_start;
 extern uint32_t *_init_end;
+
+/* These should probably be defined elseware. */
+#define USER_start 0x1000
+#define USER_stack 0x20000000
 
 void
 proc1_main(void)
@@ -38,8 +43,8 @@ proc1_main(void)
 	
 	memset(&u, 0, sizeof(label_t));
 	u.psr = MODE_USR;
-	u.sp = 0x20000000;
-	u.pc = 0x1000;
+	u.sp = USER_stack;
+	u.pc = USER_start;
 	
 	drop_to_user(&u, (void *) (up->kstack + PAGE_SIZE));
 }
@@ -51,27 +56,19 @@ init_proc1(void)
 	space_t space;
 	proc_t p;
 	
-	debug("create proc 1\n");
-	
-	debug("init at 0x%h, to 0x%h\n", &_init_start, &_init_end);
-	
 	page = (reg_t) get_ram_page();
 	stack = (reg_t) get_ram_page();
 	space_page = (reg_t) get_ram_page();
 	
 	space = space_new(space_page);
 	
-	debug("map space\n");
-	
-	va = 0x1000;
+	va = USER_start;
 	pa = (reg_t) &_init_start;
 	
 	for (o = 0; 
 	     pa + o < (reg_t) &_init_end;
 	     o += PAGE_SIZE) {
-	     
-		debug("map 0x%h to 0x%h\n", pa + o, va + o);
-		
+	  
 		if (!mapping_add(space, pa + o, va + o)) {
 			debug("Failed to map 0x%h to 0x%h\n", pa + o, va + o);
 			while (true)
@@ -86,8 +83,8 @@ init_proc1(void)
 			;
 	}
 	
-	if (!mapping_add(space, pa, 0x20000000 - PAGE_SIZE)) {
-		debug("Failed to map 0x%h to 0x%h\n", pa, 0x20000000 - PAGE_SIZE);
+	if (!mapping_add(space, pa, USER_stack - PAGE_SIZE)) {
+		debug("Failed to map 0x%h to 0x%h\n", pa, USER_stack - PAGE_SIZE);
 		while (true)
 			;
 	}
@@ -104,28 +101,47 @@ init_proc1(void)
 	p->state = PROC_ready;
 }
 
+static int
+handle_memory_request(proc_t p, 
+                      memory_req_t req,
+                      memory_resp_t resp)
+{
+	debug("have memory request from %i\n", p->pid);
+	
+	debug("want memory from 0x%h\n", req->from);
+	debug("to 0x%h\n", req->va);
+	
+	return ERR;
+}
+
 void
 proc0_main(void)
 {
-	char m[MESSAGE_LEN];
+	char s[MESSAGE_LEN], r[MESSAGE_LEN];
+	memory_resp_t resp = (memory_resp_t) r;
+	memory_req_t req = (memory_req_t) s;
+	int ret;
 	proc_t p;
-		
-	debug("proc0 started!\n");
+	
 	init_proc1();
 	
-	debug("proc0 looping\n");
 	while (true) {
-		p = krecv(m);
+		p = krecv(s);
 		if (p == nil) {
-			debug("umm\n");
 			continue;
 		}
 		
-		debug("got message '%s' from %i\n", m, p->pid);
+		switch (req->type) {
+		default:
+			ret = ERR;
+			break;
 		
-		snprintf(m, sizeof(m), "Hello %i!", p->pid);
+		case MESSAGE_memory:
+			ret = handle_memory_request(p, req, resp);
+			break;
+		}
 		
-		if (kreply(p, m) != OK) {
+		if (kreply(p, ret, r) != OK) {
 			debug("problem sending reply!\n");
 		}
 	}

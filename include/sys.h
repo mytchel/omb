@@ -25,26 +25,27 @@
  *
  */
 
-#include "head.h"
-#include "fns.h"
+#ifndef _SYS_H_
+#define _SYS_H_
 
-int
-kmain(void)
-{
-	proc_t p;
-	
-  debug("OMB Booting...\n");
+typedef enum {
+	MESSAGE_memory
+} message_t;
 
-	init_intc();
-	init_watchdog();
-	init_timers();
-	init_memory();
-	
-	p = init_proc0();
-	
-	schedule(p);
-  
-  /* Never reached */
-  return 0;
-}
+typedef struct memory_req *memory_req_t;
+typedef struct memory_resp *memory_resp_t;
 
+struct memory_req {
+	message_t type; /* = MESSAGE_memory */
+	
+	void *from;
+	void *va; /* nil for random free place. */
+};
+
+struct memory_resp {
+	message_t type; /* = MESSAGE_memory */
+	
+	void *va; /* Where it is. nil for failure. */
+};
+
+#endif

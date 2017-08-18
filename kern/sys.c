@@ -63,7 +63,7 @@ ksend(proc_t p,
 	
 	set_intr(i);
 	
-	return OK;
+	return p->message_ret;
 }
 
 proc_t
@@ -96,6 +96,7 @@ krecv(void *m)
 
 int
 kreply(proc_t p,
+       int ret,
        void *m)
 {
 	intr_t i;
@@ -105,6 +106,7 @@ kreply(proc_t p,
 	}
 	
 	memmove(p->rmessage, m, MESSAGE_LEN);
+	p->message_ret = ret;
 	
 	i = set_intr(INTR_off);
 	p->state = PROC_ready;
@@ -119,11 +121,6 @@ syssend(int pid, void *s, void *r)
 {
 	void *ks, *kr;
 	proc_t p;
-	
-	debug("syssend from %i to %i with 0x%h and 0x%h\n",
-	      up->pid, pid, s, r);
-	      
-	debug("sending data user   '%s'\n", s);
 	
 	p = find_proc(pid);
 	if (p == nil) {
@@ -164,7 +161,8 @@ sysrecv(void *m)
 }
 
 reg_t
-sysreply(int pid, 
+sysreply(int pid,
+         int ret,
          void *m)
 {
 	void *km;
@@ -182,7 +180,7 @@ sysreply(int pid,
 		return ERR;
 	}
 	
-	return kreply(p, km);
+	return kreply(p, ret, km);
 }
 
 void *systab[NSYSCALLS] = {

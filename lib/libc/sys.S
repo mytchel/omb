@@ -27,13 +27,13 @@
 
 .section .text
 
-.global _start
+.global start
 .global send
 .global recv
 .global reply
 
 
-_start:
+start:
 	bl main
 	b .
 

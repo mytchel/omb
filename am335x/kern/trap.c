@@ -142,8 +142,6 @@ trap(reg_t pc, int type)
 {
   uint32_t fsr;
   reg_t addr;
-  
-  debug("trap at 0x%h of type %i\n", pc, type);
 
   switch(type) {
   case ABORT_INTERRUPT:

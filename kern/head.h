@@ -50,6 +50,7 @@ struct proc {
 	reg_t kstack;
 	
 	void *smessage, *rmessage;
+	int message_ret;
 	proc_t waiting;
 	proc_t waiting_on;
 	
@@ -80,6 +81,7 @@ krecv(void *m);
 
 int
 kreply(proc_t p,
+       int ret,
        void *m);
 
 
@@ -112,11 +114,11 @@ space_new(reg_t page);
 bool
 mapping_add(space_t s, reg_t pa, reg_t va);
 
-void
-mmu_switch(space_t s);
-
 void *
 kernel_addr(space_t s, reg_t addr, size_t len);
+
+void
+mmu_switch(space_t s);
 
 /* Variables. */
 
