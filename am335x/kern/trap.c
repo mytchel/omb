@@ -190,7 +190,7 @@ trap(reg_t pc, int type)
 
 	debug("trap doesn't know what to do");
 	if (up != nil)
-		debug(" with proc %i!\n", up->pid);
+		debug(" with proc %i!\n", up->page->pid);
 	else
 		debug("!\n");
 		

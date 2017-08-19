@@ -31,7 +31,8 @@
 #define SYSCALL_SEND            0
 #define SYSCALL_RECV            1
 #define SYSCALL_REPLY           2
+#define SYSCALL_GET_PROC_PAGE   3
 
-#define NSYSCALLS               3
+#define NSYSCALLS               4
 
 #endif

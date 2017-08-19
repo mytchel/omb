@@ -93,6 +93,8 @@ schedule(proc_t n)
 		goto_label(&up->label);
 		
 	} else {
+		debug("idle\n");
+		
 		set_intr(INTR_on);
 		while (true)
 			;
@@ -145,7 +147,7 @@ remove_from_list(proc_t *l, proc_t p)
 }
 	
 proc_t
-proc_new(space_t space)
+proc_new(space_t space, void *page)
 {
   int pid, npid;
   proc_t p;
@@ -157,25 +159,20 @@ proc_new(space_t space)
 	              (void *) pid, 
 	              (void *) npid));
 	
-	debug("new proc going at %i\n", pid);
-	
   p = &procs[pid];
 
-	debug("new proc at 0x%h\n", p);
+	p->page = page;
+	memset(p->page, 0, PAGE_SIZE);
+	p->page->pid = pid;
 	
-	p->pid = pid;
   p->state = PROC_dead;
   p->space = space;
 
   p->next = nil;
   p->wnext = nil;
-  p->waiting = nil;
-  p->waiting_on = nil;
 
-	debug("add to list\n");
 	add_to_list_back(&alive, p);
 
-	debug("new proc created\n");
   return p;
 }
 
@@ -185,7 +182,7 @@ find_proc(int pid)
   proc_t p;
   
   for (p = alive; p != nil; p = p->next) {
-  	if (p->pid == pid) {
+  	if (p->page->pid == pid) {
   		return p;
   	}
   }

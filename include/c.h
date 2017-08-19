@@ -35,18 +35,28 @@
 
 #define MESSAGE_LEN 64
 
-int
-send(int pid, 
-     void *s, 
-     void *r);
+typedef struct proc_page *proc_page_t;
+
+struct proc_page {
+	int pid;
+	
+	uint8_t message_out[MESSAGE_LEN];
+	uint8_t message_in[MESSAGE_LEN];
+	int ret;
+};
+
+proc_page_t
+get_proc_page(void);
 
 int
-recv(void *m);
+send(int pid);
+
+int
+recv(void);
 
 int
 reply(int pid,
-      int ret, 
-      void *m);
+      int ret);
 
 
 bool

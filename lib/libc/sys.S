@@ -28,6 +28,7 @@
 .section .text
 
 .global start
+.global get_proc_page
 .global send
 .global recv
 .global reply
@@ -37,6 +38,12 @@ start:
 	bl main
 	b .
 
+
+get_proc_page:
+	push {r12, lr}
+	mov r12, #SYSCALL_GET_PROC_PAGE
+	svc 0
+	pop {r12, pc}
 
 send:
 	push {r12, lr}

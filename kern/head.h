@@ -47,15 +47,14 @@ struct proc {
 	label_t label;
 	
 	procstate_t state;
-	int pid;
 	
-	void *smessage, *rmessage;
-	int message_ret;
-	proc_t waiting;
-	proc_t waiting_on;
+	proc_page_t page;
+	void *page_user; /* Virtual address of page. */
 	
 	space_t space;
 	
+	proc_t waiting_on;
+	proc_t waiting;
 	proc_t next;
 	proc_t wnext;
 	
@@ -63,7 +62,7 @@ struct proc {
 };
 
 proc_t
-proc_new(space_t space);
+proc_new(space_t space, void *page);
 
 proc_t
 find_proc(int pid);
@@ -72,17 +71,14 @@ void
 schedule(proc_t next);
 
 int
-ksend(proc_t p,
-      void *s, 
-      void *r);
+ksend(proc_t p);
 
 proc_t
-krecv(void *m);
+krecv(void);
 
 int
 kreply(proc_t p,
-       int ret,
-       void *m);
+       int ret);
 
 
 /* Machine dependant. */

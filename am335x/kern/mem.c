@@ -373,6 +373,26 @@ mapping_add(space_t s, reg_t pa, reg_t va)
 	return true;
 }
 
+reg_t
+mapping_remove(space_t s, reg_t va)
+{
+	struct l2 *l2;
+	reg_t pa;
+	
+	l2 = get_l2(s, L1X(va), false);
+	if (l2 == nil) {
+		return nil;
+	}
+	
+	if (l2->tab[L2X(va)] != L2_FAULT) {
+		pa = l2->tab[L2X(va)] & PAGE_MASK;
+		l2->tab[L2X(va)] = L2_FAULT;
+		return pa;
+	} else {
+		return nil;
+	}
+}
+
 void *
 kernel_addr(space_t s, reg_t addr, size_t len)
 {

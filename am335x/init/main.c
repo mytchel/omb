@@ -32,15 +32,20 @@
 int
 main(void)
 {
-	char s[MESSAGE_LEN], r[MESSAGE_LEN];
-	memory_resp_t resp = (memory_resp_t) r;
-	memory_req_t req = (memory_req_t) s;
+	memory_req_t req;
+	proc_page_t page;
+	uint32_t i;
+	
+	page = get_proc_page();	
+	
+	req = (memory_req_t) page->message_out;
 	
 	req->type = MESSAGE_memory;
 	
-	if (send(0, req, resp) != OK) {
-		while (true)
-			;
+	while (send(0) == OK) {
+		req->type++;
+		for (i = 0; i < 0xfffff; i++)
+				;
 	}
 	
 	while (true)

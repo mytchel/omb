@@ -37,7 +37,7 @@ AR = $(CROSS)ar
 OBJCOPY = $(CROSS)objcopy
 OBJDUMP = $(CROSS)objdump
 
-CFLAGS = -std=c89 -O3 \
+CFLAGS = -std=c89 \
 	-Wall -Werror \
 	-mcpu=cortex-a8 \
 	-nostdinc -ffreestanding \

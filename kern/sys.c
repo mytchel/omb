@@ -28,9 +28,7 @@
 #include <head.h>
 
 int
-ksend(proc_t p,
-      void *s, 
-      void *r)
+ksend(proc_t p)
 {
 	proc_t *pp;
 	intr_t i;
@@ -38,9 +36,6 @@ ksend(proc_t p,
 	if (p->state == PROC_dead) {
 		return ERR;
 	}
-	
-	up->smessage = s;
-	up->rmessage = r;
 	
 	up->waiting_on = p;
 	
@@ -62,11 +57,11 @@ ksend(proc_t p,
 	
 	set_intr(i);
 	
-	return p->message_ret;
+	return p->page->ret;
 }
 
 proc_t
-krecv(void *m)
+krecv(void)
 {
 	intr_t i;
 	proc_t w;
@@ -79,7 +74,10 @@ krecv(void *m)
 				continue;
 			}
 
-			memmove(m, w->smessage, MESSAGE_LEN);
+			memmove(up->page->message_in, 
+			        w->page->message_out,
+			        MESSAGE_LEN);
+			
 			w->state = PROC_reply;
 			w->wnext = nil;
 			return w;
@@ -95,8 +93,7 @@ krecv(void *m)
 
 int
 kreply(proc_t p,
-       int ret,
-       void *m)
+       int ret)
 {
 	intr_t i;
 	
@@ -104,8 +101,11 @@ kreply(proc_t p,
 		return ERR;
 	}
 	
-	memmove(p->rmessage, m, MESSAGE_LEN);
-	p->message_ret = ret;
+	memmove(p->page->message_in,
+	        p->page->message_out,
+	        MESSAGE_LEN);
+	
+	p->page->ret = ret;
 	
 	i = set_intr(INTR_off);
 	schedule(p);
@@ -115,76 +115,55 @@ kreply(proc_t p,
 }
 
 reg_t
-syssend(int pid, void *s, void *r)
+sys_get_proc_page(void)
 {
-	void *ks, *kr;
+	return (reg_t) up->page_user;
+}
+
+reg_t
+sys_send(int pid)
+{
 	proc_t p;
 	
 	p = find_proc(pid);
 	if (p == nil) {
 		return ERR;
 	}
-	
-	ks = kernel_addr(up->space, (reg_t) s, 
-	                 MESSAGE_LEN);
-	
-	kr = kernel_addr(up->space, (reg_t) r, 
-	                 MESSAGE_LEN);
-	
-	if (ks == nil || kr == nil) {  
-		return ERR;
-	}
 
-	return ksend(p, ks, kr);
+	return ksend(p);
 }
 
 reg_t
-sysrecv(void *m)
+sys_recv(void)
 {
 	proc_t p;
-	void *km;
 	
-	km = kernel_addr(up->space, (reg_t) m, 
-	                 MESSAGE_LEN);
-	
-	if (km == nil) {  
-		return ERR;
-	}
-	
-	p = krecv(km);
+	p = krecv();
 	if (p == nil) {
 		return ERR;
 	} else {
-		return p->pid;
+		return p->page->pid;
 	}
 }
 
 reg_t
-sysreply(int pid,
-         int ret,
-         void *m)
+sys_reply(int pid,
+         int ret)
 {
-	void *km;
 	proc_t p;
 	
 	p = find_proc(pid);
 	if (p == nil) {
 		return ERR;
 	}
-		
-	km = kernel_addr(up->space, (reg_t) m, 
-	                 MESSAGE_LEN);
 	
-	if (km == nil) {  
-		return ERR;
-	}
-	
-	return kreply(p, ret, km);
+	return kreply(p, ret);
 }
 
 void *systab[NSYSCALLS] = {
-	[SYSCALL_SEND]        = (void *) &syssend,
-	[SYSCALL_RECV]        = (void *) &sysrecv,
-	[SYSCALL_REPLY]       = (void *) &sysreply,
+	[SYSCALL_GET_PROC_PAGE]  = (void *) &sys_get_proc_page,
+	[SYSCALL_SEND]           = (void *) &sys_send,
+	[SYSCALL_RECV]           = (void *) &sys_recv,
+	[SYSCALL_REPLY]          = (void *) &sys_reply,
 };
 	

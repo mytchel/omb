@@ -41,8 +41,6 @@ proc1_main(void)
 {
 	label_t u;
 	
-	debug("proc1 starting\n");
-	
 	memset(&u, 0, sizeof(label_t));
 	u.psr = MODE_USR;
 	u.sp = USER_stack;
@@ -54,11 +52,12 @@ proc1_main(void)
 void
 init_proc1(void)
 {
-	reg_t space_page, va, pa, o;
+	reg_t space_page, page, va, pa, o;
 	space_t space;
 	proc_t p;
 	
 	space_page = (reg_t) get_ram_page();
+	page = (reg_t) get_ram_page();
 	
 	space = space_new(space_page);
 	
@@ -89,13 +88,20 @@ init_proc1(void)
 			;
 	}
 	
-	p = proc_new(space);
+	if (!mapping_add(space, page, USER_stack)) {
+		debug("Failed to map 0x%h to 0x%h\n", page, USER_stack);
+		while (true)
+			;
+	}
+	
+	p = proc_new(space, (void *) page);
 	if (p == nil) {
 		debug("Failed to create proc1!\n");
 		while (true)
 			;
 	}
 	
+	p->page_user = (void *) USER_stack;
 	func_label(&p->label, p->kstack, KSTACK_LEN, &proc1_main);
 	
 	p->state = PROC_ready;
@@ -106,7 +112,7 @@ handle_memory_request(proc_t p,
                       memory_req_t req,
                       memory_resp_t resp)
 {
-	debug("have memory request from %i\n", p->pid);
+	debug("have memory request from %i\n", p->page->pid);
 	
 	return ERR;
 }
@@ -114,9 +120,8 @@ handle_memory_request(proc_t p,
 void
 proc0_main(void)
 {
-	char s[MESSAGE_LEN], r[MESSAGE_LEN];
-	memory_resp_t resp = (memory_resp_t) r;
-	memory_req_t req = (memory_req_t) s;
+	memory_resp_t resp = (memory_resp_t) up->page->message_out;
+	memory_req_t req = (memory_req_t) up->page->message_in;
 	proc_t p;
 	int ret;
 	
@@ -125,13 +130,14 @@ proc0_main(void)
 	while (true) {
 		debug("proc0 waiting for message\n");
 		
-		p = krecv(s);
+		p = krecv();
 		if (p == nil) {
 			continue;
 		}
 		
 		switch (req->type) {
 		default:
+			debug("bad request type %i\n", req->type);
 			ret = ERR;
 			break;
 		
@@ -140,7 +146,7 @@ proc0_main(void)
 			break;
 		}
 		
-		if (kreply(p, ret, r) != OK) {
+		if (kreply(p, ret) != OK) {
 			debug("problem sending reply!\n");
 		}
 	}
@@ -149,16 +155,17 @@ proc0_main(void)
 proc_t
 init_proc0(void)
 {
-	reg_t space_page, stack;
+	reg_t space_page, stack, page;
 	space_t space;
 	proc_t p;
 	
 	space_page = (reg_t) get_ram_page();
+	page = (reg_t) get_ram_page();
 	stack = (reg_t) get_ram_page();
 	
 	space = space_new(space_page);
 	
-	p = proc_new(space);
+	p = proc_new(space, (void *) page);
 	if (p == nil) {
 		debug("Failed to create proc0!\n");
 		while (true)
