@@ -99,7 +99,7 @@ swi_ex:
 	mov r10, sp
 	mov r11, lr
 	
-	cpsie if, #MODE_SVC
+	cpsid if, #MODE_SVC
 	
 	ldr lr, =systab
 	add r12, lr, r12, lsl #2

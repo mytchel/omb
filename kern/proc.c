@@ -145,6 +145,24 @@ remove_from_list(proc_t *l, proc_t p)
 	}
 }
 	
+void
+proc_start(void)
+{
+	label_t *u = (label_t *) up->page->message_in;
+	proc_t p;
+	
+	p = krecv();
+	if (p == nil) {
+		return;
+	}
+	
+	if (kreply(p, OK) != OK) {
+		return;
+	}
+		
+	drop_to_user(u, up->kstack, KSTACK_LEN);
+}
+
 proc_t
 proc_new(space_t space, void *page)
 {
@@ -162,7 +180,6 @@ proc_new(space_t space, void *page)
 	memset(p, 0, sizeof(struct proc));
   
   p->pid = pid;
-  p->state = PROC_dead;
   p->space = space;
 
 	p->page = page;
@@ -173,8 +190,12 @@ proc_new(space_t space, void *page)
   p->next = nil;
   p->wnext = nil;
 
+	func_label(&p->label, p->kstack, KSTACK_LEN, &proc_start);
+	
+	p->state = PROC_ready;
+	
 	add_to_list_back(&alive, p);
-
+		
   return p;
 }
 

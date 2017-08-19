@@ -37,23 +37,11 @@ extern uint32_t *_init_end;
 #define USER_stack 0x20000000
 
 void
-proc1_main(void)
-{
-	label_t u;
-	
-	memset(&u, 0, sizeof(label_t));
-	u.psr = MODE_USR;
-	u.sp = USER_stack;
-	u.pc = USER_start;
-	
-	drop_to_user(&u, &up->kstack[KSTACK_LEN]);
-}
-
-void
 init_proc1(void)
 {
 	reg_t space_page, page, va, pa, o;
 	space_t space;
+	label_t *u;
 	proc_t p;
 	
 	space_page = (reg_t) get_ram_page();
@@ -102,9 +90,16 @@ init_proc1(void)
 	}
 	
 	p->page_user = (void *) USER_stack;
-	func_label(&p->label, p->kstack, KSTACK_LEN, &proc1_main);
 	
-	p->state = PROC_ready;
+	u = (label_t *) up->page->message_out;
+	u->pc = USER_start;
+	u->sp = USER_stack;
+	
+	if (ksend(p) != OK) {
+		debug("Failed to send regs to new proc!\n");
+		while (true)
+			;
+	}
 }
 
 static int
@@ -116,9 +111,7 @@ handle_addr_request(proc_t p,
 	reg_t pa, va;
 	space_t s;
 	size_t l;
-	
-	debug("have memory request from %i for len %i\n", p->pid, req->len);
-	
+		
 	switch (req->from_type) {
 	case ADDR_REQ_from_ram:
 		get_page_f = (reg_t (*)(reg_t)) &get_ram_page;
@@ -160,15 +153,21 @@ handle_addr_request(proc_t p,
 	return OK;
 }
 
+static int
+handle_proc_request(proc_t p, 
+                    proc_req_t req,
+                    proc_resp_t resp)
+{
+	debug("proc request from %i\n", p->pid);
+	return ERR;
+}
+
 void
 proc0_main(void)
 {
-	addr_resp_t resp = (addr_resp_t) up->page->message_out;
-	addr_req_t req = (addr_req_t) up->page->message_in;
+	message_t *type = (message_t *) up->page->message_in;
 	proc_t p;
 	int ret;
-	
-	debug("in proc 0\n");
 	
 	init_proc1();
 	
@@ -178,14 +177,22 @@ proc0_main(void)
 			continue;
 		}
 		
-		switch (req->type) {
+		switch (*type) {
 		default:
-			debug("bad request type %i from %i\n", req->type, p->pid);
+			debug("bad request type %i from %i\n", *type, p->pid);
 			ret = ERR;
 			break;
 		
 		case MESSAGE_addr:
-			ret = handle_addr_request(p, req, resp);
+			ret = handle_addr_request(p, 
+			                          (addr_req_t) up->page->message_in, 
+			                          (addr_resp_t) up->page->message_out);
+			break;
+		
+		case MESSAGE_proc:
+			ret = handle_proc_request(p, 
+			                          (proc_req_t) up->page->message_in, 
+			                          (proc_resp_t) up->page->message_out);
 			break;
 		}
 		

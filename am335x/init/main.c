@@ -53,30 +53,39 @@ int
 main(void)
 {
 	proc_page_t page;
-	addr_resp_t resp;
-	addr_req_t req;
+	addr_resp_t aresp;
+	addr_req_t areq;
+	proc_req_t preq;
 	uart_regs_t uart;
 		
 	page = get_proc_page();	
 	
-	req = (addr_req_t) page->message_out;
-	resp = (addr_resp_t) page->message_in;
+	areq = (addr_req_t) page->message_out;
+	aresp = (addr_resp_t) page->message_in;
+	preq = (proc_req_t) page->message_out;
 	
-	req->type = MESSAGE_addr;
-	req->from_type = ADDR_REQ_from_io;
-	req->from_addr = (void *) UART0;
-	req->to_type = ADDR_REQ_to_local;
-	req->to_addr = (void *) 0xf000;
-	req->len = sizeof(struct uart_regs);
+	areq->type = MESSAGE_addr;
+	areq->from_type = ADDR_REQ_from_io;
+	areq->from_addr = (void *) UART0;
+	areq->to_type = ADDR_REQ_to_local;
+	areq->to_addr = (void *) 0xf000;
+	areq->len = sizeof(struct uart_regs);
 	
 	if (send(0) != OK) {
 		while (true)
 			;
 	}
 	
-	uart = (uart_regs_t) resp->va;
+	uart = (uart_regs_t) aresp->va;
 	
 	puts(uart, "Hello from userspace!\n");
+	
+	preq->type = MESSAGE_proc;
+	
+	if (send(0) != OK) {
+		while (true)
+			;
+	}
 	
 	while (true)
 		;

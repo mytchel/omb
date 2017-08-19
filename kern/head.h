@@ -32,9 +32,10 @@
 typedef struct proc *proc_t;
 
 typedef enum {
-	PROC_oncpu,
-	PROC_ready,
 	PROC_dead,
+	PROC_enter,
+	PROC_ready,
+	PROC_oncpu,
 	PROC_send,
 	PROC_reply,
 	PROC_recv,
@@ -100,10 +101,15 @@ int
 goto_label(label_t *l) __attribute__((noreturn));
 
 void
-drop_to_user(label_t *l, void *kstack_top) __attribute__((noreturn));
+drop_to_user(label_t *l, 
+             void *kstack, 
+             size_t stacklen)
+__attribute__((noreturn));
 
 void
-func_label(label_t *l, void *stack, size_t stacklen,
+func_label(label_t *l, 
+           void *stack, 
+           size_t stacklen,
            void (*func)(void));
 
 space_t

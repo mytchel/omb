@@ -33,7 +33,7 @@
 
 /* All messages must be MESSAGE_LEN bytes long. */
 
-#define MESSAGE_LEN 64
+#define MESSAGE_LEN 128
 
 typedef struct proc_page *proc_page_t;
 

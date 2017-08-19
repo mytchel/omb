@@ -69,8 +69,8 @@ struct addr_resp {
 };
 
 ASSERT_MESSAGE_SIZE(addr_resp);
-              
-              
+
+
 typedef struct proc_req *proc_req_t;
 typedef struct proc_resp *proc_resp_t;
 

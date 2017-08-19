@@ -31,7 +31,6 @@ int
 ksend(proc_t p)
 {
 	proc_t *pp;
-	intr_t i;
 	
 	if (p->state == PROC_dead) {
 		return ERR;
@@ -47,15 +46,12 @@ ksend(proc_t p)
 		
 	} while (!cas(pp, nil, up));	
 	
-	i = set_intr(INTR_off);
-	
+	up->state = PROC_send;
 	if (p->state == PROC_recv) {
 		schedule(p);
 	} else {
 		schedule(nil);
 	}
-	
-	set_intr(i);
 	
 	return p->page->ret;
 }
@@ -63,7 +59,6 @@ ksend(proc_t p)
 proc_t
 krecv(void)
 {
-	intr_t i;
 	proc_t w;
 	
 	while (true) {
@@ -83,10 +78,8 @@ krecv(void)
 			return w;
 			
 		} else {
-			i = set_intr(INTR_off);
 			up->state = PROC_recv;
 			schedule(nil);
-			set_intr(i);
 		}
 	}
 }
@@ -95,8 +88,6 @@ int
 kreply(proc_t p,
        int ret)
 {
-	intr_t i;
-	
 	if (p->state != PROC_reply || p->waiting_on != up) {
 		return ERR;
 	}
@@ -107,9 +98,7 @@ kreply(proc_t p,
 	
 	p->page->ret = ret;
 	
-	i = set_intr(INTR_off);
 	schedule(p);
-	set_intr(i);
 	
 	return OK;
 }
@@ -124,8 +113,6 @@ reg_t
 sys_send(int pid)
 {
 	proc_t p;
-	
-	debug("%i sending to %i\n", up->page->pid, pid);
 	
 	p = find_proc(pid);
 	if (p == nil) {
