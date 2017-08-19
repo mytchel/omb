@@ -42,6 +42,7 @@ kmain(void)
 	
 	p = init_proc0();
 	
+	debug("start\n");
 	schedule(p);
   
   /* Never reached */

@@ -108,28 +108,71 @@ init_proc1(void)
 }
 
 static int
-handle_memory_request(proc_t p, 
-                      memory_req_t req,
-                      memory_resp_t resp)
+handle_addr_request(proc_t p, 
+                    addr_req_t req,
+                    addr_resp_t resp)
 {
-	debug("have memory request from %i\n", p->page->pid);
+	reg_t (*get_page_f)(reg_t);
+	reg_t pa, va;
+	space_t s;
+	size_t l;
 	
-	return ERR;
+	debug("have memory request from %i for len %i\n", p->pid, req->len);
+	
+	switch (req->from_type) {
+	case ADDR_REQ_from_ram:
+		get_page_f = (reg_t (*)(reg_t)) &get_ram_page;
+		break;
+			
+	case ADDR_REQ_from_io:
+		get_page_f = &get_io_page;
+		break;
+		
+	case ADDR_REQ_from_local:
+	default:
+		return ERR;
+	}
+
+	switch (req->to_type) {
+	case ADDR_REQ_to_local:
+		s = p->space;
+		va = (reg_t) req->to_addr;
+		break;
+	
+	case ADDR_REQ_to_other:
+	default:
+		return ERR;
+	}
+	
+	for (l = 0; l < req->len; l += PAGE_SIZE) {
+		pa = get_page_f((reg_t) req->from_addr + l);
+		if (pa == nil) {
+			return ERR;
+		}
+		
+		if (!mapping_add(s, pa, va + l)) {
+			return ERR;
+		}
+	}
+	
+	resp->va = (void *) va;
+	
+	return OK;
 }
 
 void
 proc0_main(void)
 {
-	memory_resp_t resp = (memory_resp_t) up->page->message_out;
-	memory_req_t req = (memory_req_t) up->page->message_in;
+	addr_resp_t resp = (addr_resp_t) up->page->message_out;
+	addr_req_t req = (addr_req_t) up->page->message_in;
 	proc_t p;
 	int ret;
+	
+	debug("in proc 0\n");
 	
 	init_proc1();
 	
 	while (true) {
-		debug("proc0 waiting for message\n");
-		
 		p = krecv();
 		if (p == nil) {
 			continue;
@@ -137,12 +180,12 @@ proc0_main(void)
 		
 		switch (req->type) {
 		default:
-			debug("bad request type %i\n", req->type);
+			debug("bad request type %i from %i\n", req->type, p->pid);
 			ret = ERR;
 			break;
 		
-		case MESSAGE_memory:
-			ret = handle_memory_request(p, req, resp);
+		case MESSAGE_addr:
+			ret = handle_addr_request(p, req, resp);
 			break;
 		}
 		

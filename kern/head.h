@@ -47,6 +47,7 @@ struct proc {
 	label_t label;
 	
 	procstate_t state;
+	int pid;
 	
 	proc_page_t page;
 	void *page_user; /* Virtual address of page. */

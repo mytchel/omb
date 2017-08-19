@@ -74,7 +74,7 @@ static struct addr_holder *addrs;
 
 static space_t space = nil;
 
-void *
+reg_t
 get_ram_page(void)
 {
 	struct addr_holder *a;
@@ -84,7 +84,7 @@ get_ram_page(void)
 		for (i = 0; i < a->n; i++) {
 			if (a->addrs[i].len > 0 && a->addrs[i].type == ADDR_ram) {
 				a->addrs[i].len -= PAGE_SIZE;
-				return (void *) (a->addrs[i].start + a->addrs[i].len);
+				return (a->addrs[i].start + a->addrs[i].len);
 			}
 		}
 	}
@@ -115,7 +115,7 @@ add_addr(reg_t start, reg_t end, addr_t type)
 	addrs->n++;
 }
 
-void *
+reg_t
 get_io_page(reg_t addr)
 {
 	struct addr_holder *a;
@@ -137,7 +137,7 @@ get_io_page(reg_t addr)
 			  /* Shrink chunk. */
 			  a->addrs[i].len = addr - a->addrs[i].start;
 			  				
-				return (void *) addr;
+				return addr;
 			}
 		}
 	}
@@ -295,7 +295,7 @@ l2_init(struct space *s, struct l2 *l2, reg_t l1)
 {
 	uint32_t *tab;
 	
-	tab = get_ram_page();
+	tab = (uint32_t *) get_ram_page();
 	if (tab == nil) {
 		return nil;
 	}

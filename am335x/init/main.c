@@ -28,25 +28,55 @@
 #include <c.h>
 #include <sys.h>
 #include <string.h>
+#include <uart.h>
+
+void
+putc(uart_regs_t uart, char c)
+{
+  if (c == '\n')
+    putc(uart, '\r');
+	
+	while ((uart->lsr & (1 << 5)) == 0)
+		;
+	
+	uart->hr = c;
+}
+
+void
+puts(uart_regs_t uart, const char *c)
+{
+  while (*c)
+    putc(uart, *c++);
+}
 
 int
 main(void)
 {
-	memory_req_t req;
 	proc_page_t page;
-	uint32_t i;
-	
+	addr_resp_t resp;
+	addr_req_t req;
+	uart_regs_t uart;
+		
 	page = get_proc_page();	
 	
-	req = (memory_req_t) page->message_out;
+	req = (addr_req_t) page->message_out;
+	resp = (addr_resp_t) page->message_in;
 	
-	req->type = MESSAGE_memory;
+	req->type = MESSAGE_addr;
+	req->from_type = ADDR_REQ_from_io;
+	req->from_addr = (void *) UART0;
+	req->to_type = ADDR_REQ_to_local;
+	req->to_addr = (void *) 0xf000;
+	req->len = sizeof(struct uart_regs);
 	
-	while (send(0) == OK) {
-		req->type++;
-		for (i = 0; i < 0xfffff; i++)
-				;
+	if (send(0) != OK) {
+		while (true)
+			;
 	}
+	
+	uart = (uart_regs_t) resp->va;
+	
+	puts(uart, "Hello from userspace!\n");
 	
 	while (true)
 		;

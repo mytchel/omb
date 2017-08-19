@@ -33,44 +33,42 @@
                   too_big##m)
 
 typedef enum {
-	MESSAGE_memory,
+	MESSAGE_addr,
 	MESSAGE_proc,
 } message_t;
 
-typedef struct memory_req *memory_req_t;
-typedef struct memory_resp *memory_resp_t;
+typedef struct addr_req *addr_req_t;
+typedef struct addr_resp *addr_resp_t;
 
-struct memory_req {
-	message_t type; /* = MESSAGE_memory */
+struct addr_req {
+	message_t type; /* = MESSAGE_addr */
 
-#define MEMORY_REQ_from_ram    0
-#define MEMORY_REQ_from_io     1
-#define MEMORY_REQ_from_local  2
+#define ADDR_REQ_from_ram    0
+#define ADDR_REQ_from_io     1
+#define ADDR_REQ_from_local  2
 	
 	int from_type;
 	void *from_addr;
-	
-	
-#define MEMORY_REQ_to_local    0
-#define MEMORY_REQ_to_other    1
+		
+#define ADDR_REQ_to_local    0
+#define ADDR_REQ_to_other    1
 
 	int to_type;
 	int other;
-	void *va; /* nil for random free place. */
-	
+	void *to_addr;
 	
 	size_t len;
 };
 
-ASSERT_MESSAGE_SIZE(memory_req);
+ASSERT_MESSAGE_SIZE(addr_req);
 
-struct memory_resp {
-	message_t type; /* = MESSAGE_memory */
+struct addr_resp {
+	message_t type; /* = MESSAGE_addr */
 	
 	void *va; /* Where it is. nil for failure. */
 };
 
-ASSERT_MESSAGE_SIZE(memory_resp);
+ASSERT_MESSAGE_SIZE(addr_resp);
               
               
 typedef struct proc_req *proc_req_t;

@@ -28,14 +28,6 @@
 #ifndef _FNS_H
 #define _FNS_H
 
-#define readl(a)	(*(volatile uint32_t*)(a))
-#define readw(a)	(*(volatile uint16_t*)(a))
-#define readb(a)	(*(volatile uint8_t*)(a))
-
-#define writel(v, a)	(*(volatile uint32_t*)(a) = (uint32_t)(v))
-#define writew(v, a)	(*(volatile uint16_t*)(a) = (uint16_t)(v))
-#define writeb(v, a)	(*(volatile uint8_t*)(a) = (uint8_t)(v))
-
 #define AP_NO_NO	0
 #define AP_RW_NO	1
 #define AP_RW_RO	2
@@ -69,10 +61,10 @@ imap(void *, void *, int, bool);
 void
 mmu_load_ttb(uint32_t *);
 
-void *
+reg_t
 get_io_page(reg_t addr);
 
-void *
+reg_t
 get_ram_page(void);
 
 /* Initialisation functions */

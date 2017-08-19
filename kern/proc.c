@@ -127,7 +127,6 @@ remove_from_list(proc_t *l, proc_t p)
 {
 	proc_t pt;
 
-	debug("add 0x%h to list 0x%h which is at 0x%h\n", p, l, *l);
 	while (true) {
 		if (*l == p) {
 			if (cas(l, p, p->next)) {
@@ -160,14 +159,17 @@ proc_new(space_t space, void *page)
 	              (void *) npid));
 	
   p = &procs[pid];
-
-	p->page = page;
-	memset(p->page, 0, PAGE_SIZE);
-	p->page->pid = pid;
-	
+	memset(p, 0, sizeof(struct proc));
+  
+  p->pid = pid;
   p->state = PROC_dead;
   p->space = space;
 
+	p->page = page;
+	
+	memset(p->page, 0, PAGE_SIZE);
+	p->page->pid = pid;
+	
   p->next = nil;
   p->wnext = nil;
 
@@ -182,7 +184,7 @@ find_proc(int pid)
   proc_t p;
   
   for (p = alive; p != nil; p = p->next) {
-  	if (p->page->pid == pid) {
+  	if (p->pid == pid) {
   		return p;
   	}
   }

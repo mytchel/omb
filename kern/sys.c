@@ -102,7 +102,7 @@ kreply(proc_t p,
 	}
 	
 	memmove(p->page->message_in,
-	        p->page->message_out,
+	        up->page->message_out,
 	        MESSAGE_LEN);
 	
 	p->page->ret = ret;
@@ -125,6 +125,8 @@ sys_send(int pid)
 {
 	proc_t p;
 	
+	debug("%i sending to %i\n", up->page->pid, pid);
+	
 	p = find_proc(pid);
 	if (p == nil) {
 		return ERR;
@@ -142,7 +144,7 @@ sys_recv(void)
 	if (p == nil) {
 		return ERR;
 	} else {
-		return p->page->pid;
+		return p->pid;
 	}
 }
 

@@ -25,46 +25,47 @@
  *
  */
 
-#include "head.h"
-#include "fns.h"
-#include <stdarg.h>
-#include <uart.h>
+#ifndef _UART_H_
+#define _UART_H_
 
-static uart_regs_t uart = (uart_regs_t) UART0;
+#define UART_LEN      	0x1000
+#define UART0         	0x44E09000
+#define UART0_INTR      72
 
-void
-putc(char c)
-{
-  if (c == '\n')
-    putc('\r');
-	
-	while ((uart->lsr & (1 << 5)) == 0)
-		;
-	
-	uart->hr = c;
-}
+typedef struct uart_regs *uart_regs_t;
 
-void
-puts(const char *c)
-{
-  while (*c)
-    putc(*c++);
-}
+struct uart_regs {
+  uint32_t hr;
+  uint32_t ier;
+  uint32_t iir;
+  uint32_t lcr;
+  uint32_t mcr;
+  uint32_t lsr;
+  uint32_t tcr;
+  uint32_t spr;
+  uint32_t mdr1;
+  uint32_t mdr2;
+  uint32_t txfll;
+  uint32_t txflh;
+  uint32_t rxfll;
+  uint32_t rxflh;
+  uint32_t blr;
+  uint32_t uasr;
+  uint32_t scr;
+  uint32_t ssr;
+  uint32_t eblr;
+  uint32_t mvr;
+  uint32_t sysc;
+  uint32_t syss;
+  uint32_t wer;
+  uint32_t cfps;
+  uint32_t rxfifo_lvl;
+  uint32_t txfifo_lvl;
+  uint32_t ier2;
+  uint32_t isr2;
+  uint32_t freq_sel;
+  uint32_t mdr3;
+  uint32_t tx_dma_threshold;
+};
 
-int
-debug(const char *fmt, ...)
-{
-	char str[128];
-	va_list ap;
-	size_t i;
-	
-	va_start(ap, fmt);
-	i = vsnprintf(str, sizeof(str), fmt, ap);
-	va_end(ap);
-	
-	if (i > 0) {
-		puts(str);
-	}
-	
-	return i;
-}
+#endif
