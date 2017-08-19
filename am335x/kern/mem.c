@@ -389,7 +389,7 @@ kernel_addr(space_t s, reg_t addr, size_t len)
 		if (l2 == nil) {
 			return nil;
 		}
-		
+	
 		if (l2->tab[L2X(va)] == L2_FAULT) {
 			return nil;
 			

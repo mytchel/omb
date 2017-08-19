@@ -28,8 +28,13 @@
 #ifndef _SYS_H_
 #define _SYS_H_
 
+#define ASSERT_MESSAGE_SIZE(m) \
+    STATIC_ASSERT(sizeof(struct m) <= MESSAGE_LEN, \
+                  too_big##m)
+
 typedef enum {
-	MESSAGE_memory
+	MESSAGE_memory,
+	MESSAGE_proc,
 } message_t;
 
 typedef struct memory_req *memory_req_t;
@@ -37,15 +42,53 @@ typedef struct memory_resp *memory_resp_t;
 
 struct memory_req {
 	message_t type; /* = MESSAGE_memory */
+
+#define MEMORY_REQ_from_ram    0
+#define MEMORY_REQ_from_io     1
+#define MEMORY_REQ_from_local  2
 	
-	void *from;
+	int from_type;
+	void *from_addr;
+	
+	
+#define MEMORY_REQ_to_local    0
+#define MEMORY_REQ_to_other    1
+
+	int to_type;
+	int other;
 	void *va; /* nil for random free place. */
+	
+	
+	size_t len;
 };
+
+ASSERT_MESSAGE_SIZE(memory_req);
 
 struct memory_resp {
 	message_t type; /* = MESSAGE_memory */
 	
 	void *va; /* Where it is. nil for failure. */
 };
+
+ASSERT_MESSAGE_SIZE(memory_resp);
+              
+              
+typedef struct proc_req *proc_req_t;
+typedef struct proc_resp *proc_resp_t;
+
+struct proc_req {
+	message_t type; /* = MESSAGE_proc */
+	
+};
+
+ASSERT_MESSAGE_SIZE(proc_req);
+              
+              
+struct proc_resp {
+	message_t type; /* = MESSAGE_proc */
+	
+};
+
+ASSERT_MESSAGE_SIZE(proc_resp);
 
 #endif

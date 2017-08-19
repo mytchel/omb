@@ -55,7 +55,6 @@ ksend(proc_t p,
 	i = set_intr(INTR_off);
 	
 	if (p->state == PROC_recv) {
-		p->state = PROC_ready;
 		schedule(p);
 	} else {
 		schedule(nil);
@@ -109,7 +108,6 @@ kreply(proc_t p,
 	p->message_ret = ret;
 	
 	i = set_intr(INTR_off);
-	p->state = PROC_ready;
 	schedule(p);
 	set_intr(i);
 	
@@ -136,7 +134,8 @@ syssend(int pid, void *s, void *r)
 	if (ks == nil || kr == nil) {  
 		return ERR;
 	}
-		return ksend(p, ks, kr);
+
+	return ksend(p, ks, kr);
 }
 
 reg_t

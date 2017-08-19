@@ -37,8 +37,6 @@ main(void)
 	memory_req_t req = (memory_req_t) s;
 	
 	req->type = MESSAGE_memory;
-	req->from = nil;
-	req->va = nil;
 	
 	if (send(0, req, resp) != OK) {
 		while (true)

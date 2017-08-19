@@ -41,23 +41,23 @@ proc1_main(void)
 {
 	label_t u;
 	
+	debug("proc1 starting\n");
+	
 	memset(&u, 0, sizeof(label_t));
 	u.psr = MODE_USR;
 	u.sp = USER_stack;
 	u.pc = USER_start;
 	
-	drop_to_user(&u, (void *) (up->kstack + PAGE_SIZE));
+	drop_to_user(&u, &up->kstack[KSTACK_LEN]);
 }
 
 void
 init_proc1(void)
 {
-	reg_t page, stack, space_page, va, pa, o;
+	reg_t space_page, va, pa, o;
 	space_t space;
 	proc_t p;
 	
-	page = (reg_t) get_ram_page();
-	stack = (reg_t) get_ram_page();
 	space_page = (reg_t) get_ram_page();
 	
 	space = space_new(space_page);
@@ -89,14 +89,14 @@ init_proc1(void)
 			;
 	}
 	
-	p = proc_new(page, stack, space);
+	p = proc_new(space);
 	if (p == nil) {
 		debug("Failed to create proc1!\n");
 		while (true)
 			;
 	}
 	
-	proc_func(p, &proc1_main);
+	func_label(&p->label, p->kstack, KSTACK_LEN, &proc1_main);
 	
 	p->state = PROC_ready;
 }
@@ -108,9 +108,6 @@ handle_memory_request(proc_t p,
 {
 	debug("have memory request from %i\n", p->pid);
 	
-	debug("want memory from 0x%h\n", req->from);
-	debug("to 0x%h\n", req->va);
-	
 	return ERR;
 }
 
@@ -120,12 +117,14 @@ proc0_main(void)
 	char s[MESSAGE_LEN], r[MESSAGE_LEN];
 	memory_resp_t resp = (memory_resp_t) r;
 	memory_req_t req = (memory_req_t) s;
-	int ret;
 	proc_t p;
+	int ret;
 	
 	init_proc1();
 	
 	while (true) {
+		debug("proc0 waiting for message\n");
+		
 		p = krecv(s);
 		if (p == nil) {
 			continue;
@@ -150,24 +149,23 @@ proc0_main(void)
 proc_t
 init_proc0(void)
 {
-	reg_t page, stack, space_page;
+	reg_t space_page, stack;
 	space_t space;
 	proc_t p;
 	
-	page = (reg_t) get_ram_page();
-	stack = (reg_t) get_ram_page();
 	space_page = (reg_t) get_ram_page();
+	stack = (reg_t) get_ram_page();
 	
 	space = space_new(space_page);
 	
-	p = proc_new(page, stack, space);
+	p = proc_new(space);
 	if (p == nil) {
 		debug("Failed to create proc0!\n");
 		while (true)
 			;
 	}
 	
-	proc_func(p, &proc0_main);
+	func_label(&p->label, (void *) stack, PAGE_SIZE, &proc0_main);
 	
 	p->state = PROC_ready;
 	

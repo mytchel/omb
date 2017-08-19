@@ -45,6 +45,8 @@ SECTIONS
 	. = ALIGN(4096);
 
 	. = . + 0x100;
+	. = ALIGN(4096);
+	
 	_ex_stack_top = .;
 
 	_kernel_end = .;

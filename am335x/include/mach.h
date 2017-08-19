@@ -25,8 +25,8 @@
  *
  */
 
-#ifndef _MACH_H
-#define _MACH_H
+#ifndef _MACH_H_
+#define _MACH_H_
 
 #define PAGE_SHIFT 	 12
 #define PAGE_SIZE	 (1UL << PAGE_SHIFT)

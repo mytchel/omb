@@ -30,9 +30,12 @@
 void add_to_list_back(struct proc **, struct proc *);
 bool remove_from_list(struct proc **, struct proc *);
 
+#define MAX_PROCS 512
+
 static uint32_t nextpid = 0;
 
-static proc_t procs = nil;
+static struct proc procs[MAX_PROCS] = { 0 };
+proc_t alive = nil;
 proc_t up = nil;
 
 static struct proc *
@@ -40,18 +43,27 @@ next_proc(void)
 {
 	proc_t p;
 	
-	p = up->next;
+	if (alive == nil) {
+		return nil;
+	} else if (up != nil) {
+		p = up->next;
+	} else {
+		p = alive;
+	}
+	
 	do {
 		if (p == nil) {
-			p = procs;
+			p = alive;
+			
 		} else if (p->state == PROC_ready) {
 			return p;
+			
 		} else {
 			p = p->next;
 		}
 	} while (p != up);
 	
-	return p->state == PROC_ready ? p : nil;
+	return p != nil && p->state == PROC_ready ? p : nil;
 }
 
 void
@@ -79,6 +91,7 @@ schedule(proc_t n)
 		up->state = PROC_oncpu;
 		mmu_switch(up->space);
 		goto_label(&up->label);
+		
 	} else {
 		set_intr(INTR_on);
 		while (true)
@@ -112,6 +125,7 @@ remove_from_list(proc_t *l, proc_t p)
 {
 	proc_t pt;
 
+	debug("add 0x%h to list 0x%h which is at 0x%h\n", p, l, *l);
 	while (true) {
 		if (*l == p) {
 			if (cas(l, p, p->next)) {
@@ -131,16 +145,26 @@ remove_from_list(proc_t *l, proc_t p)
 }
 	
 proc_t
-proc_new(reg_t page, 
-         reg_t kstack,
-         space_t space)
+proc_new(space_t space)
 {
+  int pid, npid;
   proc_t p;
+  
+	do {
+		pid = nextpid;
+		npid = (pid + 1) % MAX_PROCS;
+	} while (!cas(&nextpid, 
+	              (void *) pid, 
+	              (void *) npid));
 	
-  p = (proc_t) page;
+	debug("new proc going at %i\n", pid);
+	
+  p = &procs[pid];
 
+	debug("new proc at 0x%h\n", p);
+	
+	p->pid = pid;
   p->state = PROC_dead;
-  p->kstack = kstack;
   p->space = space;
 
   p->next = nil;
@@ -148,14 +172,10 @@ proc_new(reg_t page,
   p->waiting = nil;
   p->waiting_on = nil;
 
-	do {
-		p->pid = nextpid;
-	} while (!cas(&nextpid, 
-	              (void *) p->pid, 
-	              (void *) (p->pid + 1)));
+	debug("add to list\n");
+	add_to_list_back(&alive, p);
 
-	add_to_list_back(&procs, p);
-
+	debug("new proc created\n");
   return p;
 }
 
@@ -164,7 +184,7 @@ find_proc(int pid)
 {
   proc_t p;
   
-  for (p = procs; p != nil; p = p->next) {
+  for (p = alive; p != nil; p = p->next) {
   	if (p->pid == pid) {
   		return p;
   	}

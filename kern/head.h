@@ -41,13 +41,13 @@ typedef enum {
 	PROC_recving,
 } procstate_t;
 
+#define KSTACK_LEN 512
+
 struct proc {
 	label_t label;
 	
 	procstate_t state;
 	int pid;
-	
-	reg_t kstack;
 	
 	void *smessage, *rmessage;
 	int message_ret;
@@ -58,12 +58,12 @@ struct proc {
 	
 	proc_t next;
 	proc_t wnext;
+	
+	uint8_t kstack[KSTACK_LEN];
 };
 
 proc_t
-proc_new(reg_t page,
-         reg_t kstack,
-         space_t space);
+proc_new(space_t space);
 
 proc_t
 find_proc(int pid);
@@ -106,7 +106,8 @@ void
 drop_to_user(label_t *l, void *kstack_top) __attribute__((noreturn));
 
 void
-proc_func(proc_t p, void (*func)(void));
+func_label(label_t *l, void *stack, size_t stacklen,
+           void (*func)(void));
 
 space_t
 space_new(reg_t page);

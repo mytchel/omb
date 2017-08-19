@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2017 Mytchel Hammond <mytchel@openmailbox.org>
+ * Copyright (c) 2017 Mytchel Hammond <mytch@lackname.org>
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -188,7 +188,12 @@ trap(reg_t pc, int type)
     break;
   }
 
-	debug("trap doesn't know what to do!\n");
+	debug("trap doesn't know what to do");
+	if (up != nil)
+		debug(" with proc %i!\n", up->pid);
+	else
+		debug("!\n");
+		
 	while (true)
 		;
 }
