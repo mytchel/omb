@@ -69,9 +69,9 @@ krecv(void)
 				continue;
 			}
 
-			memmove(up->page->message_in, 
-			        w->page->message_out,
-			        MESSAGE_LEN);
+			memcpy(up->page->message_in, 
+			       w->page->message_out,
+			       MESSAGE_LEN);
 			
 			w->state = PROC_reply;
 			w->wnext = nil;
@@ -92,9 +92,9 @@ kreply(proc_t p,
 		return ERR;
 	}
 	
-	memmove(p->page->message_in,
-	        up->page->message_out,
-	        MESSAGE_LEN);
+	memcpy(p->page->message_in,
+	       up->page->message_out,
+	       MESSAGE_LEN);
 	
 	p->page->ret = ret;
 	

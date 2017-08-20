@@ -28,7 +28,7 @@
 #include <c.h>
 
 void
-memmove(void *dst, const void *src, size_t len)
+memcpy(void *dst, const void *src, size_t len)
 {
 	const uint8_t *s;
 	uint8_t *d;

@@ -71,7 +71,7 @@ cas(void *addr, void *old, void *new);
 
 
 void
-memmove(void *dst, const void *src, size_t len);
+memcpy(void *dst, const void *src, size_t len);
 
 void
 memset(void *dst, uint8_t v, size_t len);

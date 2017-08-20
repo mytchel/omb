@@ -67,6 +67,9 @@ get_io_page(reg_t addr);
 reg_t
 get_ram_page(void);
 
+reg_t
+get_space_page(reg_t addr, space_t s);
+
 /* Initialisation functions */
 
 void

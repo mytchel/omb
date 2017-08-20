@@ -74,24 +74,6 @@ static struct addr_holder *addrs;
 
 static space_t space = nil;
 
-reg_t
-get_ram_page(void)
-{
-	struct addr_holder *a;
-	size_t i;
-	
-	for (a = addrs; a != nil; a = a->next) {
-		for (i = 0; i < a->n; i++) {
-			if (a->addrs[i].len > 0 && a->addrs[i].type == ADDR_ram) {
-				a->addrs[i].len -= PAGE_SIZE;
-				return (a->addrs[i].start + a->addrs[i].len);
-			}
-		}
-	}
-	
-	return nil;
-}
-
 static void
 add_addr(reg_t start, reg_t end, addr_t type)
 {
@@ -113,36 +95,6 @@ add_addr(reg_t start, reg_t end, addr_t type)
 	addrs->addrs[addrs->n].len = end - start;
 	addrs->addrs[addrs->n].type = type;
 	addrs->n++;
-}
-
-reg_t
-get_io_page(reg_t addr)
-{
-	struct addr_holder *a;
-	size_t i;
-	
-	for (a = addrs; a != nil; a = a->next) {
-		for (i = 0; i < a->n; i++) {
-			if (a->addrs[i].type == ADDR_io &&
-			    a->addrs[i].start <= addr &&
-			    a->addrs[i].start + a->addrs[i].len > addr) {
-			  
-			  if (a->addrs[i].start + a->addrs[i].len > addr + PAGE_SIZE) {
-			  	/* Add another spot for remainder of chunk. */
-			  	add_addr(addr + PAGE_SIZE, 
-			  	         a->addrs[i].start + a->addrs[i].len,
-			  	         ADDR_io);
-			  }
-			  
-			  /* Shrink chunk. */
-			  a->addrs[i].len = addr - a->addrs[i].start;
-			  				
-				return addr;
-			}
-		}
-	}
-	
-	return nil;
 }
 
 void
@@ -405,7 +357,7 @@ kernel_addr(space_t s, reg_t addr, size_t len)
 	
 	pa = 0;
 	for (l = 0; l < off + len; l += PAGE_SIZE) {
-		l2 = get_l2(s, L1X(va + l), true);
+		l2 = get_l2(s, L1X(va + l), false);
 		if (l2 == nil) {
 			return nil;
 		}
@@ -422,3 +374,72 @@ kernel_addr(space_t s, reg_t addr, size_t len)
 	return (void *) pa;
 }
 
+
+reg_t
+get_ram_page(void)
+{
+	struct addr_holder *a;
+	size_t i;
+	
+	for (a = addrs; a != nil; a = a->next) {
+		for (i = 0; i < a->n; i++) {
+			if (a->addrs[i].len > 0 && a->addrs[i].type == ADDR_ram) {
+				a->addrs[i].len -= PAGE_SIZE;
+				return (a->addrs[i].start + a->addrs[i].len);
+			}
+		}
+	}
+	
+	return nil;
+}
+
+reg_t
+get_io_page(reg_t addr)
+{
+	struct addr_holder *a;
+	size_t i;
+	
+	for (a = addrs; a != nil; a = a->next) {
+		for (i = 0; i < a->n; i++) {
+			if (a->addrs[i].type == ADDR_io &&
+			    a->addrs[i].start <= addr &&
+			    a->addrs[i].start + a->addrs[i].len > addr) {
+			  
+			  if (a->addrs[i].start + a->addrs[i].len > addr + PAGE_SIZE) {
+			  	/* Add another spot for remainder of chunk. */
+			  	add_addr(addr + PAGE_SIZE, 
+			  	         a->addrs[i].start + a->addrs[i].len,
+			  	         ADDR_io);
+			  }
+			  
+			  /* Shrink chunk. */
+			  a->addrs[i].len = addr - a->addrs[i].start;
+			  				
+				return addr;
+			}
+		}
+	}
+	
+	return nil;
+}
+
+reg_t
+get_space_page(reg_t addr, space_t s)
+{
+	struct l2 *l2;
+	reg_t pa;
+	
+	l2 = get_l2(s, L1X(addr), false);
+	if (l2 == nil) {
+		return nil;
+	}
+	
+	if (l2->tab[L2X(addr)] == L2_FAULT) {
+		return nil;
+		
+	} else {
+		pa = (l2->tab[L2X(addr)] & PAGE_MASK);
+		l2->tab[L2X(addr)] = L2_FAULT;
+		return pa;
+	}
+}

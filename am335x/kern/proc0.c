@@ -83,11 +83,6 @@ init_proc1(void)
 	}
 	
 	p = proc_new(space, (void *) page);
-	if (p == nil) {
-		debug("Failed to create proc1!\n");
-		while (true)
-			;
-	}
 	
 	p->page_user = (void *) USER_stack;
 	
@@ -107,43 +102,66 @@ handle_addr_request(proc_t p,
                     addr_req_t req,
                     addr_resp_t resp)
 {
-	reg_t (*get_page_f)(reg_t);
+	reg_t (*get_page_f)(reg_t, space_t);
+	space_t from, to;
 	reg_t pa, va;
-	space_t s;
+	proc_t other;
 	size_t l;
-		
+	 
+	debug("addr request from %i wants %i bytes \n", p->pid, req->len);
+	
 	switch (req->from_type) {
 	case ADDR_REQ_from_ram:
-		get_page_f = (reg_t (*)(reg_t)) &get_ram_page;
+		debug("from ram ");
+		get_page_f = (reg_t (*)(reg_t, space_t)) &get_ram_page;
+		from = nil;
 		break;
 			
 	case ADDR_REQ_from_io:
-		get_page_f = &get_io_page;
+		debug("from io 0x%h ", req->from_addr);
+		get_page_f = (reg_t (*)(reg_t, space_t)) &get_io_page;
+		from = nil;
 		break;
 		
 	case ADDR_REQ_from_local:
+		debug("from local 0x%h ", req->from_addr);
+		get_page_f = (reg_t (*)(reg_t, space_t)) &get_space_page;
+		from = p->space;
+		break;
+		
 	default:
 		return ERR;
 	}
 
 	switch (req->to_type) {
 	case ADDR_REQ_to_local:
-		s = p->space;
+		debug("to local 0x%h\n", req->to_addr);
+		to = p->space;
 		va = (reg_t) req->to_addr;
 		break;
 	
 	case ADDR_REQ_to_other:
+		debug("to other %i 0x%h\n", req->to, req->to_addr);
+		other = find_proc(req->to);
+		if (other == nil) {
+			return ERR;
+		}
+		
+		to = other->space;
+		va = (reg_t) req->to_addr;
+		break;
+		
 	default:
 		return ERR;
 	}
 	
-	for (l = 0; l < req->len; l += PAGE_SIZE) {
-		pa = get_page_f((reg_t) req->from_addr + l);
+	for (l = 0; l < req->len; l += PAGE_SIZE) {		
+		pa = get_page_f((reg_t) req->from_addr + l, from);
 		if (pa == nil) {
 			return ERR;
 		}
 		
-		if (!mapping_add(s, pa, va + l)) {
+		if (!mapping_add(to, pa, va + l)) {
 			return ERR;
 		}
 	}
@@ -158,8 +176,27 @@ handle_proc_request(proc_t p,
                     proc_req_t req,
                     proc_resp_t resp)
 {
-	debug("proc request from %i\n", p->pid);
-	return ERR;
+	reg_t space_page, page;
+	space_t space;
+	proc_t n;
+	
+	space_page = (reg_t) get_ram_page();
+	page = (reg_t) get_ram_page();
+	
+	space = space_new(space_page);
+		
+	if (!mapping_add(space, page, (reg_t) req->page_addr)) {
+		/* TODO: free pages. */
+		return ERR;
+	}
+	
+	n = proc_new(space, (void *) page);
+	
+	n->page_user = req->page_addr;
+	
+	resp->pid = n->pid;
+	
+	return OK;
 }
 
 void
@@ -216,12 +253,7 @@ init_proc0(void)
 	space = space_new(space_page);
 	
 	p = proc_new(space, (void *) page);
-	if (p == nil) {
-		debug("Failed to create proc0!\n");
-		while (true)
-			;
-	}
-	
+		
 	func_label(&p->label, (void *) stack, PAGE_SIZE, &proc0_main);
 	
 	p->state = PROC_ready;

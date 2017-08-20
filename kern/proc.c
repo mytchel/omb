@@ -153,11 +153,11 @@ proc_start(void)
 	
 	p = krecv();
 	if (p == nil) {
-		return;
+		/* Do something. */
 	}
 	
 	if (kreply(p, OK) != OK) {
-		return;
+		/* Do something. */
 	}
 		
 	drop_to_user(u, up->kstack, KSTACK_LEN);

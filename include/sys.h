@@ -54,7 +54,7 @@ struct addr_req {
 #define ADDR_REQ_to_other    1
 
 	int to_type;
-	int other;
+	int to;
 	void *to_addr;
 	
 	size_t len;
@@ -76,7 +76,7 @@ typedef struct proc_resp *proc_resp_t;
 
 struct proc_req {
 	message_t type; /* = MESSAGE_proc */
-	
+	void *page_addr;
 };
 
 ASSERT_MESSAGE_SIZE(proc_req);
@@ -85,6 +85,7 @@ ASSERT_MESSAGE_SIZE(proc_req);
 struct proc_resp {
 	message_t type; /* = MESSAGE_proc */
 	
+	int pid;
 };
 
 ASSERT_MESSAGE_SIZE(proc_resp);
