@@ -76,6 +76,7 @@ main_uart(void)
 	areq->to_type = ADDR_REQ_to_local;
 	areq->to_addr = (void *) (((reg_t) &_bss_end + PAGE_SIZE) & PAGE_MASK);
 	areq->len = sizeof(struct uart_regs);
+	areq->flags = ADDR_REQ_flag_read|ADDR_REQ_flag_write;
 	
 	if (send(0) != OK) {
 		while (true)
@@ -129,6 +130,7 @@ main(void)
 	areq->to_type = ADDR_REQ_to_local;
 	areq->to_addr = (void *) (((reg_t) &_bss_end + PAGE_SIZE) & PAGE_MASK);
 	areq->len = (size_t) &_text_end - (size_t) &_text_start;
+	areq->flags = ADDR_REQ_flag_read|ADDR_REQ_flag_exec|ADDR_REQ_flag_cache;
 	
 	if (send(0) != OK) {
 		while (true)
@@ -146,6 +148,7 @@ main(void)
 	areq->to = pid;
 	areq->to_addr = &_text_start;
 	areq->len = (size_t) &_text_end - (size_t) &_text_start;
+	areq->flags = ADDR_REQ_flag_read|ADDR_REQ_flag_write|ADDR_REQ_flag_cache;
 	
 	if (send(0) != OK) {
 		while (true)
@@ -157,6 +160,7 @@ main(void)
 	areq->to_type = ADDR_REQ_to_local;
 	areq->to_addr = (void *) (((reg_t) &_bss_end + PAGE_SIZE) & PAGE_MASK);
 	areq->len = (size_t) &_data_end - (size_t) &_data_start;
+	areq->flags = ADDR_REQ_flag_read|ADDR_REQ_flag_write|ADDR_REQ_flag_cache;
 	
 	if (send(0) != OK) {
 		while (true)
@@ -174,19 +178,20 @@ main(void)
 	areq->to = pid;
 	areq->to_addr = &_data_start;
 	areq->len = (size_t) &_data_end - (size_t) &_data_start;
+	areq->flags = ADDR_REQ_flag_read|ADDR_REQ_flag_write|ADDR_REQ_flag_cache;
 	
 	if (send(0) != OK) {
 		while (true)
 			;
 	}
-	
-		
+			
 	areq->type = MESSAGE_addr;
 	areq->from_type = ADDR_REQ_from_ram;
 	areq->to_type = ADDR_REQ_to_other;
 	areq->to = pid;
 	areq->to_addr = &_bss_start;
 	areq->len = (size_t) &_bss_end - (size_t) &_bss_start;
+	areq->flags = ADDR_REQ_flag_read|ADDR_REQ_flag_write|ADDR_REQ_flag_cache;
 	
 	if (send(0) != OK) {
 		while (true)
@@ -199,6 +204,7 @@ main(void)
 	areq->to = pid;
 	areq->to_addr = (void *) (0x20000000 - 0x1000);
 	areq->len = 0x1000;
+	areq->flags = ADDR_REQ_flag_read|ADDR_REQ_flag_write|ADDR_REQ_flag_cache;
 	
 	if (send(0) != OK) {
 		while (true)

@@ -57,6 +57,11 @@ struct addr_req {
 	int to;
 	void *to_addr;
 	
+#define ADDR_REQ_flag_read    (1<<0)
+#define ADDR_REQ_flag_write   (1<<1)
+#define ADDR_REQ_flag_exec    (1<<2)
+#define ADDR_REQ_flag_cache   (1<<3)
+	int flags;
 	size_t len;
 };
 

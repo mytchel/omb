@@ -116,7 +116,11 @@ space_t
 space_new(reg_t page);
 
 bool
-mapping_add(space_t s, reg_t pa, reg_t va);
+mapping_add(space_t s, reg_t pa, reg_t va,
+            bool write, bool cache);
+
+reg_t
+mapping_remove(space_t s, reg_t va);
 
 void *
 kernel_addr(space_t s, reg_t addr, size_t len);

@@ -45,15 +45,9 @@
 #define L2_SMALL     0b10
 #define L2_TINY      0b11
 
-typedef enum {
-	ADDR_ram,
-	ADDR_io,
-} addr_t;
-
 struct addr {
 	reg_t start;
 	size_t len;
-	addr_t type;
 };
 
 struct addr_holder {
@@ -74,8 +68,8 @@ static struct addr_holder *addrs;
 
 static space_t space = nil;
 
-static void
-add_addr(reg_t start, reg_t end, addr_t type)
+void
+add_addr(reg_t start, reg_t end)
 {
 	struct addr_holder *h;
 
@@ -93,7 +87,6 @@ add_addr(reg_t start, reg_t end, addr_t type)
 	
 	addrs->addrs[addrs->n].start = start;
 	addrs->addrs[addrs->n].len = end - start;
-	addrs->addrs[addrs->n].type = type;
 	addrs->n++;
 }
 
@@ -111,28 +104,26 @@ init_memory(void)
 	                / sizeof(struct addr);
 		
   add_addr((reg_t) addrs + PAGE_SIZE, 
-           (uint32_t) &_ram_end,
-           ADDR_ram);
+           (uint32_t) &_ram_end);
   
   add_addr((uint32_t) &_ram_start,
-	         PAGE_ALIGN((uint32_t) &_kernel_start),
-	         ADDR_ram);
+	         PAGE_ALIGN((uint32_t) &_kernel_start));
 
-  add_addr(0x47400000, 0x47404000, ADDR_io); /* USB */
-  add_addr(0x44E31000, 0x44E32000, ADDR_io); /* DMTimer1 */
-  add_addr(0x48042000, 0x48043000, ADDR_io); /* DMTIMER3 */
-  add_addr(0x44E09000, 0x44E0A000, ADDR_io); /* UART0 */
-  add_addr(0x48022000, 0x48023000, ADDR_io); /* UART1 */
-  add_addr(0x48024000, 0x48025000, ADDR_io); /* UART2 */
-  add_addr(0x44E07000, 0x44E08000, ADDR_io); /* GPIO0 */
-  add_addr(0x4804c000, 0x4804d000, ADDR_io); /* GPIO1 */
-  add_addr(0x481ac000, 0x481ad000, ADDR_io); /* GPIO2 */
-  add_addr(0x481AE000, 0x481AF000, ADDR_io); /* GPIO3 */
-  add_addr(0x48060000, 0x48061000, ADDR_io); /* MMCHS0 */
-  add_addr(0x481D8000, 0x481D9000, ADDR_io); /* MMC1 */
-  add_addr(0x47810000, 0x47820000, ADDR_io); /* MMCHS2 */
-  add_addr(0x44E35000, 0x44E36000, ADDR_io); /* Watchdog */
-  add_addr(0x44E05000, 0x44E06000, ADDR_io); /* DMTimer0 */
+  add_addr(0x47400000, 0x47404000); /* USB */
+  add_addr(0x44E31000, 0x44E32000); /* DMTimer1 */
+  add_addr(0x48042000, 0x48043000); /* DMTIMER3 */
+  add_addr(0x44E09000, 0x44E0A000); /* UART0 */
+  add_addr(0x48022000, 0x48023000); /* UART1 */
+  add_addr(0x48024000, 0x48025000); /* UART2 */
+  add_addr(0x44E07000, 0x44E08000); /* GPIO0 */
+  add_addr(0x4804c000, 0x4804d000); /* GPIO1 */
+  add_addr(0x481ac000, 0x481ad000); /* GPIO2 */
+  add_addr(0x481AE000, 0x481AF000); /* GPIO3 */
+  add_addr(0x48060000, 0x48061000); /* MMCHS0 */
+  add_addr(0x481D8000, 0x481D9000); /* MMC1 */
+  add_addr(0x47810000, 0x47820000); /* MMCHS2 */
+  add_addr(0x44E35000, 0x44E36000); /* Watchdog */
+  add_addr(0x44E05000, 0x44E06000); /* DMTimer0 */
 
   for (i = 0; i < 4096; i++)
     ttb[i] = L1_FAULT;
@@ -302,7 +293,9 @@ get_l2(space_t s, uint32_t l1, bool add)
 }
 
 bool
-mapping_add(space_t s, reg_t pa, reg_t va)
+mapping_add(space_t s, reg_t pa, reg_t va, 
+            bool write, 
+            bool cache)
 {
 	uint32_t tex, ap, c, b;
 	struct l2 *l2;
@@ -314,10 +307,21 @@ mapping_add(space_t s, reg_t pa, reg_t va)
 	
 	/* Read writeable, no caching. */
 	
-	ap = AP_RW_RW;
-	tex = 0;
-	c = 0;
-	b = 1;
+	if (write) {
+		ap = AP_RW_RW;
+	} else {
+		ap = AP_RW_RO;
+	}
+	
+	if (cache) {
+		tex = 7;
+		c = 1;
+		b = 0;
+	} else {
+		tex = 0;
+		c = 0;
+		b = 1;
+	}
 	
 	l2->tab[L2X(va)] = pa | L2_SMALL |
 	    (tex << 6) | (ap << 4) | (c << 3) | (b << 2);
@@ -383,7 +387,10 @@ get_ram_page(void)
 	
 	for (a = addrs; a != nil; a = a->next) {
 		for (i = 0; i < a->n; i++) {
-			if (a->addrs[i].len > 0 && a->addrs[i].type == ADDR_ram) {
+			if (a->addrs[i].len > 0 &&
+			    a->addrs[i].start >= (reg_t) &_ram_start &&
+			    a->addrs[i].start + a->addrs[i].len <= (reg_t) &_ram_end) {
+				
 				a->addrs[i].len -= PAGE_SIZE;
 				return (a->addrs[i].start + a->addrs[i].len);
 			}
@@ -401,15 +408,14 @@ get_io_page(reg_t addr)
 	
 	for (a = addrs; a != nil; a = a->next) {
 		for (i = 0; i < a->n; i++) {
-			if (a->addrs[i].type == ADDR_io &&
+			if (a->addrs[i].len > 0 &&
 			    a->addrs[i].start <= addr &&
 			    a->addrs[i].start + a->addrs[i].len > addr) {
 			  
 			  if (a->addrs[i].start + a->addrs[i].len > addr + PAGE_SIZE) {
 			  	/* Add another spot for remainder of chunk. */
 			  	add_addr(addr + PAGE_SIZE, 
-			  	         a->addrs[i].start + a->addrs[i].len,
-			  	         ADDR_io);
+			  	         a->addrs[i].start + a->addrs[i].len);
 			  }
 			  
 			  /* Shrink chunk. */

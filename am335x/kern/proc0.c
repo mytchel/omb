@@ -56,7 +56,7 @@ init_proc1(void)
 	     pa + o < (reg_t) &_init_end;
 	     o += PAGE_SIZE) {
 	  
-		if (!mapping_add(space, pa + o, va + o)) {
+		if (!mapping_add(space, pa + o, va + o, true, true)) {
 			debug("Failed to map 0x%h to 0x%h\n", pa + o, va + o);
 			while (true)
 				;
@@ -70,13 +70,13 @@ init_proc1(void)
 			;
 	}
 	
-	if (!mapping_add(space, pa, USER_stack - PAGE_SIZE)) {
+	if (!mapping_add(space, pa, USER_stack - PAGE_SIZE, true, true)) {
 		debug("Failed to map 0x%h to 0x%h\n", pa, USER_stack - PAGE_SIZE);
 		while (true)
 			;
 	}
 	
-	if (!mapping_add(space, page, USER_stack)) {
+	if (!mapping_add(space, page, USER_stack, true, false)) {
 		debug("Failed to map 0x%h to 0x%h\n", page, USER_stack);
 		while (true)
 			;
@@ -106,25 +106,21 @@ handle_addr_request(proc_t p,
 	space_t from, to;
 	reg_t pa, va;
 	proc_t other;
+	bool w, c;
 	size_t l;
-	 
-	debug("addr request from %i wants %i bytes \n", p->pid, req->len);
 	
 	switch (req->from_type) {
 	case ADDR_REQ_from_ram:
-		debug("from ram ");
 		get_page_f = (reg_t (*)(reg_t, space_t)) &get_ram_page;
 		from = nil;
 		break;
 			
 	case ADDR_REQ_from_io:
-		debug("from io 0x%h ", req->from_addr);
 		get_page_f = (reg_t (*)(reg_t, space_t)) &get_io_page;
 		from = nil;
 		break;
 		
 	case ADDR_REQ_from_local:
-		debug("from local 0x%h ", req->from_addr);
 		get_page_f = (reg_t (*)(reg_t, space_t)) &get_space_page;
 		from = p->space;
 		break;
@@ -135,13 +131,11 @@ handle_addr_request(proc_t p,
 
 	switch (req->to_type) {
 	case ADDR_REQ_to_local:
-		debug("to local 0x%h\n", req->to_addr);
 		to = p->space;
 		va = (reg_t) req->to_addr;
 		break;
 	
 	case ADDR_REQ_to_other:
-		debug("to other %i 0x%h\n", req->to, req->to_addr);
 		other = find_proc(req->to);
 		if (other == nil) {
 			return ERR;
@@ -155,13 +149,29 @@ handle_addr_request(proc_t p,
 		return ERR;
 	}
 	
+	if (req->flags & ADDR_REQ_flag_write) {
+		if (req->flags & ADDR_REQ_flag_exec) {
+			return ERR;
+		} else {
+			w = true;
+		}
+	} else {
+		w = false;
+	}
+	
+	if (req->flags & ADDR_REQ_flag_cache) {
+		c = true;
+	} else {
+		c = false;
+	}
+	
 	for (l = 0; l < req->len; l += PAGE_SIZE) {		
 		pa = get_page_f((reg_t) req->from_addr + l, from);
 		if (pa == nil) {
 			return ERR;
 		}
 		
-		if (!mapping_add(to, pa, va + l)) {
+		if (!mapping_add(to, pa, va + l, w, c)) {
 			return ERR;
 		}
 	}
@@ -185,7 +195,7 @@ handle_proc_request(proc_t p,
 	
 	space = space_new(space_page);
 		
-	if (!mapping_add(space, page, (reg_t) req->page_addr)) {
+	if (!mapping_add(space, page, (reg_t) req->page_addr, true, false)) {
 		/* TODO: free pages. */
 		return ERR;
 	}
