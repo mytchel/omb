@@ -449,3 +449,10 @@ get_space_page(reg_t addr, space_t s)
 		return pa;
 	}
 }
+
+
+void
+give_proc0_world(proc_t p)
+{
+
+}

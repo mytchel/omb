@@ -53,7 +53,8 @@ ksend(proc_t p)
 		schedule(nil);
 	}
 	
-	return p->page->ret;
+	debug("%i got reply %i\n", up->pid, up->page->ret);
+	return up->page->ret;
 }
 
 proc_t
@@ -103,6 +104,29 @@ kreply(proc_t p,
 	return OK;
 }
 
+
+proc_t
+kreply_recv(proc_t p,
+            int ret)
+{
+	if (p->state != PROC_reply || p->waiting_on != up) {
+		return nil;
+	}
+	
+	memcpy(p->page->message_in,
+	       up->page->message_out,
+	       MESSAGE_LEN);
+	
+	debug("setting reply to %i\n", ret);
+	p->page->ret = ret;
+	debug("reply is %i\n", p->page->ret);
+	
+	up->state = PROC_recv;
+	schedule(p);
+	
+	return krecv();
+}
+
 reg_t
 sys_get_proc_page(void)
 {
@@ -113,6 +137,8 @@ reg_t
 sys_send(int pid)
 {
 	proc_t p;
+	
+	debug("%i send to %i\n", up->pid, pid);
 	
 	p = find_proc(pid);
 	if (p == nil) {
@@ -127,10 +153,13 @@ sys_recv(void)
 {
 	proc_t p;
 	
+	debug("%i recv\n", up->pid);
+	
 	p = krecv();
 	if (p == nil) {
 		return ERR;
 	} else {
+		debug("%i recved from %i\n", up->pid, p->pid);
 		return p->pid;
 	}
 }
@@ -141,6 +170,8 @@ sys_reply(int pid,
 {
 	proc_t p;
 	
+	debug("%i reply to %i with %i\n", up->pid, pid, ret);
+	
 	p = find_proc(pid);
 	if (p == nil) {
 		return ERR;
@@ -149,10 +180,32 @@ sys_reply(int pid,
 	return kreply(p, ret);
 }
 
+reg_t
+sys_reply_recv(int pid,
+               int ret)
+{
+	proc_t p;
+	
+	debug("%i reply to %i with %i, now recv\n", up->pid, pid, ret);
+	
+	p = find_proc(pid);
+	if (p == nil) {
+		return ERR;
+	}
+	
+	p = kreply_recv(p, ret);
+	if (p == nil) {
+		return ERR;
+	} else {
+		return p->pid;
+	}
+}
+
 void *systab[NSYSCALLS] = {
 	[SYSCALL_GET_PROC_PAGE]  = (void *) &sys_get_proc_page,
 	[SYSCALL_SEND]           = (void *) &sys_send,
 	[SYSCALL_RECV]           = (void *) &sys_recv,
 	[SYSCALL_REPLY]          = (void *) &sys_reply,
+	[SYSCALL_REPLY_RECV]     = (void *) &sys_reply_recv,
 };
 	

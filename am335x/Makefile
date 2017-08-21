@@ -24,7 +24,7 @@
 #
 
 .SUFFIXES:
-.SUFFIXES: .c .S .h .o .a .elf .bin .list .umg
+.SUFFIXES: .c .S .h .o .a .elf .bin .list .umg .bo
 
 loadaddr=0x82000000
 TARGET = am335x
@@ -59,26 +59,40 @@ HOSTLDFLAGS =
 
 
 .PHONY: all
-all: am335x.list am335x.umg
+all: proc0.list proc1.list am335x.list am335x.umg 
 
-CLEAN += am335x.umg am335x.list init.list
+CLEAN += proc0.list proc1.list am335x.list am335x.umg 
 
-ISRC_A := \
+P0SRC_A := \
         ../lib/libc/sys.S
 
-ISRC_C := \
-				init/main.c               \
+P0SRC_C := \
+				proc0/main.c              \
+        ../lib/libc/util.c
+				
+
+P0OBJECTS := \
+	$(P0SRC_A:%.S=%.o) \
+	$(P0SRC_C:%.c=%.o)
+
+CLEAN += $(P0OBJECTS)
+
+
+P1SRC_A := \
+        ../lib/libc/sys.S
+
+P1SRC_C := \
+				proc1/main.c              \
         ../lib/libc/util.c        \
         ../lib/libstring/conv.c   \
         ../lib/libstring/scanf.c  \
         ../lib/libstring/string.c
 				
+P1OBJECTS := \
+	$(P1SRC_A:%.S=%.o) \
+	$(P1SRC_C:%.c=%.o)
 
-IOBJECTS := \
-	$(ISRC_A:%.S=%.o) \
-	$(ISRC_C:%.c=%.o)
-
-CLEAN += $(IOBJECTS)
+CLEAN += $(P1OBJECTS)
 
 
 KSRC_A := \
@@ -92,7 +106,6 @@ KSRC_C := \
         kern/timer.c              \
         kern/mem.c                \
         kern/proc.c               \
-        kern/proc0.c              \
         kern/uart.c               \
         ../kern/proc.c            \
         ../kern/sys.c             \
@@ -126,27 +139,34 @@ CLEAN += $(KOBJECTS)
 	$(OBJDUMP) -S $< > $@
 
 
-init.elf: init/init.ld $(IOBJECTS)
+.elf.bo:
+	$(OBJCOPY) --rename-section .text=.$*.text \
+	           --rename-section .data=.$*.data \
+	           --rename-section .bss=.$*.bss \
+	           -x -X -S \
+	            $< $@
+	            
+	            
+proc0.elf: proc0/linker.ld $(P0OBJECTS)
 	$(LD) $(LDFLAGS) \
-		-T init/init.ld -Ttext 0x1000 \
-		-o $@ $(IOBJECTS) \
+		-T proc0/linker.ld \
+		-o $@ $(P0OBJECTS) \
 		-lgcc
 		
 
-CLEAN += init.o init.bin init.elf
-init.o: init.elf
-	$(OBJCOPY) --rename-section .text=.init_text \
-	           --rename-section .data=.init_data \
-	           --rename-section .bss=.init_bss \
-	           -x -X -S \
-	            $> $@
-	
-
-CLEAN += $(TARGET).elf $(TARGET).list
-am335x.elf: kern/kernel.ld init.o $(KOBJECTS)
+proc1.elf: proc1/linker.ld $(P1OBJECTS)
 	$(LD) $(LDFLAGS) \
-		-T kern/kernel.ld -Ttext $(loadaddr) \
-		-o $@ $(KOBJECTS) init.o \
+		-T proc1/linker.ld \
+		-o $@ $(P1OBJECTS) \
+		-lgcc
+		
+
+CLEAN += $(TARGET).elf $(TARGET).list 
+CLEAN += proc0.bo proc1.bo proc0.elf proc1.elf
+am335x.elf: kern/linker.ld proc0.bo proc1.bo $(KOBJECTS)
+	$(LD) $(LDFLAGS) \
+		-T kern/linker.ld -Ttext $(loadaddr) \
+		-o $@ $(KOBJECTS) proc0.bo proc1.bo \
 		-lgcc
 
 

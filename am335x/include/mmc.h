@@ -25,58 +25,53 @@
  *
  */
 
-#ifndef _C_H_
-#define _C_H_
+#ifndef _AM335X_MMC_H_
+#define _AM335X_MMC_H_
 
-#include <err.h>
-#include <types.h>
+#define MMC0  0x48060000
+#define MMC1  0x481D8000
+#define MMC2  0x47810000
 
-/* All messages must be MESSAGE_LEN bytes long. */
+#define MMC0_intr 64
+#define MMC1_intr 28
+#define MMC2_intr 29
 
-#define MESSAGE_LEN 128
-
-typedef struct proc_page *proc_page_t;
-
-struct proc_page {
-	int pid;
-	
-	uint8_t message_out[MESSAGE_LEN];
-	uint8_t message_in[MESSAGE_LEN];
-	int ret;
-};
-
-proc_page_t
-get_proc_page(void);
-
-int
-send(int pid);
-
-int
-recv(void);
-
-int
-reply(int pid,
-      int ret);
-
-int
-reply_recv(int pid,
-           int ret);
-
-bool
-cas(void *addr, void *old, void *new);
-
-#define roundptr(x) (x % sizeof(void *) != 0 ?			 \
-		     x + sizeof(void *) - (x % sizeof(void *)) : \
-		     x)
-
-#define STATIC_ASSERT(COND, MSG) \
-  typedef char static_assertion_##MSG[(COND)?1:-1]
-
-
-void
-memcpy(void *dst, const void *src, size_t len);
-
-void
-memset(void *dst, uint8_t v, size_t len);
+struct mmchs_regs {
+  uint32_t pad[68];
+  uint32_t sysconfig;
+  uint32_t sysstatus;
+  uint32_t pad1[3];
+  uint32_t csre;
+  uint32_t systest;
+  uint32_t con;
+  uint32_t pwcnt;
+  uint32_t pad2[51];
+  uint32_t sdmasa;
+  uint32_t blk;
+  uint32_t arg;
+  uint32_t cmd;
+  uint32_t rsp10;
+  uint32_t rsp32;
+  uint32_t rsp54;
+  uint32_t rsp76;
+  uint32_t data;
+  uint32_t pstate;
+  uint32_t hctl;
+  uint32_t sysctl;
+  uint32_t stat;
+  uint32_t ie;
+  uint32_t ise;
+  uint32_t ac12;
+  uint32_t capa;
+  uint32_t pad3[1];
+  uint32_t curcapa;
+  uint32_t pad4[1];
+  uint32_t fe;
+  uint32_t admaes;
+  uint32_t admasal;
+  uint32_t admasah;
+  uint32_t pad5[39];
+  uint32_t rev;
+}; 
 
 #endif

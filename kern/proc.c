@@ -145,7 +145,7 @@ remove_from_list(proc_t *l, proc_t p)
 	}
 }
 	
-void
+static void
 proc_start(void)
 {
 	label_t *u = (label_t *) up->page->message_in;

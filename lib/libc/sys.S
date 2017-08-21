@@ -32,6 +32,7 @@
 .global send
 .global recv
 .global reply
+.global reply_recv
 
 
 start:
@@ -65,3 +66,9 @@ reply:
 	svc 0
 	pop {r12, pc}
 
+
+reply_recv:
+	push {r12, lr}
+	mov r12, #SYSCALL_REPLY_RECV
+	svc 0
+	pop {r12, pc}

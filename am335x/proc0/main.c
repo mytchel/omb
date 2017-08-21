@@ -25,83 +25,17 @@
  *
  */
 
-#include <head.h>
+#include <c.h>
+#include <mach.h>
 #include <sys.h>
-#include "fns.h"
-
-extern uint32_t *_init_start;
-extern uint32_t *_init_end;
-
-/* These should probably be defined elseware. */
-#define USER_start 0x1000
-#define USER_stack 0x20000000
-
-void
-init_proc1(void)
-{
-	reg_t space_page, page, va, pa, o;
-	space_t space;
-	label_t *u;
-	proc_t p;
-	
-	space_page = (reg_t) get_ram_page();
-	page = (reg_t) get_ram_page();
-	
-	space = space_new(space_page);
-	
-	va = USER_start;
-	pa = (reg_t) &_init_start;
-	
-	for (o = 0; 
-	     pa + o < (reg_t) &_init_end;
-	     o += PAGE_SIZE) {
-	  
-		if (!mapping_add(space, pa + o, va + o, true, true)) {
-			debug("Failed to map 0x%h to 0x%h\n", pa + o, va + o);
-			while (true)
-				;
-		}
-	}
-	
-	pa = (reg_t ) get_ram_page();
-	if (pa == nil) {
-		debug("Failed to get ram for init!\n");
-		while (true)
-			;
-	}
-	
-	if (!mapping_add(space, pa, USER_stack - PAGE_SIZE, true, true)) {
-		debug("Failed to map 0x%h to 0x%h\n", pa, USER_stack - PAGE_SIZE);
-		while (true)
-			;
-	}
-	
-	if (!mapping_add(space, page, USER_stack, true, false)) {
-		debug("Failed to map 0x%h to 0x%h\n", page, USER_stack);
-		while (true)
-			;
-	}
-	
-	p = proc_new(space, (void *) page);
-	
-	p->page_user = (void *) USER_stack;
-	
-	u = (label_t *) up->page->message_out;
-	u->pc = USER_start;
-	u->sp = USER_stack;
-	
-	if (ksend(p) != OK) {
-		debug("Failed to send regs to new proc!\n");
-		while (true)
-			;
-	}
-}
 
 static int
-handle_addr_request(proc_t p, 
+handle_addr_request(int pid,
                     addr_req_t req,
                     addr_resp_t resp)
 {
+	return ERR;
+#if 0
 	reg_t (*get_page_f)(reg_t, space_t);
 	space_t from, to;
 	reg_t pa, va;
@@ -179,13 +113,16 @@ handle_addr_request(proc_t p,
 	resp->va = (void *) va;
 	
 	return OK;
+#endif
 }
 
 static int
-handle_proc_request(proc_t p, 
+handle_proc_request(int pid,
                     proc_req_t req,
                     proc_resp_t resp)
 {
+	return ERR;
+#if 0
 	reg_t space_page, page;
 	space_t space;
 	proc_t n;
@@ -207,66 +144,42 @@ handle_proc_request(proc_t p,
 	resp->pid = n->pid;
 	
 	return OK;
+#endif
 }
 
-void
-proc0_main(void)
+int
+main(void)
 {
-	message_t *type = (message_t *) up->page->message_in;
-	proc_t p;
-	int ret;
+	proc_page_t page;
+	message_t *type;
+	int pid, ret;
+		
+	page = get_proc_page();	
 	
-	init_proc1();
+	type = (message_t *) page->message_in;
+	
+	pid = recv();
 	
 	while (true) {
-		p = krecv();
-		if (p == nil) {
-			continue;
-		}
-		
 		switch (*type) {
 		default:
-			debug("bad request type %i from %i\n", *type, p->pid);
 			ret = ERR;
 			break;
 		
 		case MESSAGE_addr:
-			ret = handle_addr_request(p, 
-			                          (addr_req_t) up->page->message_in, 
-			                          (addr_resp_t) up->page->message_out);
+			ret = handle_addr_request(pid, 
+			                          (addr_req_t) page->message_in, 
+			                          (addr_resp_t) page->message_out);
 			break;
 		
 		case MESSAGE_proc:
-			ret = handle_proc_request(p, 
-			                          (proc_req_t) up->page->message_in, 
-			                          (proc_resp_t) up->page->message_out);
+			ret = handle_proc_request(pid, 
+			                          (proc_req_t) page->message_in, 
+			                          (proc_resp_t) page->message_out);
 			break;
 		}
 		
-		if (kreply(p, ret) != OK) {
-			debug("problem sending reply!\n");
-		}
+		pid = reply_recv(pid, ret);
 	}
 }
 
-proc_t
-init_proc0(void)
-{
-	reg_t space_page, stack, page;
-	space_t space;
-	proc_t p;
-	
-	space_page = (reg_t) get_ram_page();
-	page = (reg_t) get_ram_page();
-	stack = (reg_t) get_ram_page();
-	
-	space = space_new(space_page);
-	
-	p = proc_new(space, (void *) page);
-		
-	func_label(&p->label, (void *) stack, PAGE_SIZE, &proc0_main);
-	
-	p->state = PROC_ready;
-	
-	return p;
-}

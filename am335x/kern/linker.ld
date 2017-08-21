@@ -23,16 +23,39 @@ SECTIONS
 		*(.data.*)
 	}
 	
-	.init ALIGN(4096) :
+	.proc0 ALIGN(4096) :
 	{
-		_init_start = .;
+		_proc0_text_start = .;
+		*(.proc0.text)
+		_proc0_text_end = .;
 		. = ALIGN(4096);
-		*(.init_text)
+	
+		_proc0_data_start = .;
+		*(.proc0.data)
+		_proc0_data_end = .;
 		. = ALIGN(4096);
-		*(.init_data)
+	
+		_proc0_bss_start = .;
+		*(.proc0.bss)
+		_proc0_bss_end = .;
+	}
+	
+	.proc1 ALIGN(4096) :
+	{	
+		_proc1_text_start = .;
+		*(.proc1.text)
+		_proc1_text_end = .;
 		. = ALIGN(4096);
-		*(.init_bss)
-		_init_end = .;
+	
+		_proc1_data_start = .;
+		*(.proc1.data)
+		_proc1_data_end = .;
+		. = ALIGN(4096);
+	
+		_proc1_bss_start = .;
+		*(.proc1.bss)
+		_proc1_bss_end = .;
+		. = ALIGN(4096);
 	}
 		
 	.bss ALIGN(4096) : 

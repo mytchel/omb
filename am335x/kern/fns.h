@@ -73,6 +73,9 @@ get_space_page(reg_t addr, space_t s);
 void
 add_addr(reg_t start, reg_t end);
 
+void
+give_proc0_world(proc_t p);
+
 /* Initialisation functions */
 
 void

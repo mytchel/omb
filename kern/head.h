@@ -82,6 +82,9 @@ int
 kreply(proc_t p,
        int ret);
 
+proc_t
+kreply_recv(proc_t p,
+            int ret);
 
 /* Machine dependant. */
 

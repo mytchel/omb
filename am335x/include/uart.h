@@ -25,12 +25,11 @@
  *
  */
 
-#ifndef _UART_H_
-#define _UART_H_
+#ifndef _AM335X_UART_H_
+#define _AM335X_UART_H_
 
-#define UART_LEN      	0x1000
 #define UART0         	0x44E09000
-#define UART0_INTR      72
+#define UART0_intr      72
 
 typedef struct uart_regs *uart_regs_t;
 
