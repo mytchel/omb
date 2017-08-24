@@ -32,6 +32,11 @@
 #define PAGE_SIZE	 (1UL << PAGE_SHIFT)
 #define PAGE_MASK	 (~(PAGE_SIZE - 1))
 
+#define PAGE_ALIGN(x)    ((((reg_t) x) + PAGE_SIZE - 1) & PAGE_MASK)
+#define PAGE_ALIGN_DN(x) ((((reg_t) x) - PAGE_SIZE + 1) & PAGE_MASK)
+
+#define PROC0_RAM_START 0xA0000000
+
 typedef struct label label_t;
 
 struct label {

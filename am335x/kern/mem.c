@@ -56,6 +56,9 @@ struct addr_holder {
 	struct addr addrs[];
 };
 
+void
+imap(void *, void *, int, bool);
+
 uint32_t
 ttb[4096]__attribute__((__aligned__(16*1024))) = { L1_FAULT };
 
@@ -64,30 +67,34 @@ extern uint32_t *_ram_end;
 extern uint32_t *_kernel_start;
 extern uint32_t *_kernel_end;
 
-static struct addr_holder *addrs;
+static struct addr_holder *ram = nil;
 
 static space_t space = nil;
 
 void
-add_addr(reg_t start, reg_t end)
+add_addr(struct addr_holder **a, reg_t start, reg_t end)
 {
 	struct addr_holder *h;
 
-	if (addrs->n == addrs->len) {
+	if ((*a)->n == (*a)->len) {
 		h = (struct addr_holder *) get_ram_page();
-		h->next = addrs;
-		addrs = h;
+		if (h == nil) {
+			return;
+		}
+		
+		h->next = *a;
+		*a = h;
 			
-		addrs->n = 0;
-		addrs->len = (PAGE_SIZE - sizeof(struct addr_holder))
+		(*a)->n = 0;
+		(*a)->len = (PAGE_SIZE - sizeof(struct addr_holder))
 		                / sizeof(struct addr);
 		                
-		memset(addrs->addrs, 0, sizeof(struct addr) * addrs->len);
+		memset((*a)->addrs, 0, sizeof(struct addr) * (*a)->len);
 	}
 	
-	addrs->addrs[addrs->n].start = start;
-	addrs->addrs[addrs->n].len = end - start;
-	addrs->n++;
+	(*a)->addrs[(*a)->n].start = start;
+	(*a)->addrs[(*a)->n].len = end - start;
+	(*a)->n++;
 }
 
 void
@@ -95,35 +102,18 @@ init_memory(void)
 {
   int i;
   
-  addrs = (struct addr_holder *)
-      PAGE_ALIGN((uint32_t) &_kernel_end + PAGE_SIZE - 1);
-	addrs->next = nil;
+  ram = (struct addr_holder *) &_ram_start;
+	ram->next = nil;
 			
-	addrs->n = 0;
-	addrs->len = (PAGE_SIZE - sizeof(struct addr_holder))
+	ram->n = 0;
+	ram->len = (PAGE_SIZE - sizeof(struct addr_holder))
 	                / sizeof(struct addr);
 		
-  add_addr((reg_t) addrs + PAGE_SIZE, 
-           (uint32_t) &_ram_end);
+  add_addr(&ram, (uint32_t) &_ram_start + PAGE_SIZE, 
+           (uint32_t) &_kernel_start);
   
-  add_addr((uint32_t) &_ram_start,
-	         PAGE_ALIGN((uint32_t) &_kernel_start));
-
-  add_addr(0x47400000, 0x47404000); /* USB */
-  add_addr(0x44E31000, 0x44E32000); /* DMTimer1 */
-  add_addr(0x48042000, 0x48043000); /* DMTIMER3 */
-  add_addr(0x44E09000, 0x44E0A000); /* UART0 */
-  add_addr(0x48022000, 0x48023000); /* UART1 */
-  add_addr(0x48024000, 0x48025000); /* UART2 */
-  add_addr(0x44E07000, 0x44E08000); /* GPIO0 */
-  add_addr(0x4804c000, 0x4804d000); /* GPIO1 */
-  add_addr(0x481ac000, 0x481ad000); /* GPIO2 */
-  add_addr(0x481AE000, 0x481AF000); /* GPIO3 */
-  add_addr(0x48060000, 0x48061000); /* MMCHS0 */
-  add_addr(0x481D8000, 0x481D9000); /* MMC1 */
-  add_addr(0x47810000, 0x47820000); /* MMCHS2 */
-  add_addr(0x44E35000, 0x44E36000); /* Watchdog */
-  add_addr(0x44E05000, 0x44E06000); /* DMTimer0 */
+  add_addr(&ram, (uint32_t) PAGE_ALIGN(&_kernel_end),
+	         (uint32_t) &_ram_end);
 
   for (i = 0; i < 4096; i++)
     ttb[i] = L1_FAULT;
@@ -143,27 +133,6 @@ init_memory(void)
   imap((void *) 0x48200000, (void *) 0x48201000, AP_RW_NO, false);
 
   mmu_enable();
-}
-
-void
-imap(void *start, void *end, int ap, bool cachable)
-{
-  uint32_t x, mask;
-
-  x = (uint32_t) start & ~((1 << 20) - 1);
-
-  mask = (ap << 10) | L1_SECTION;
-
-  if (cachable) {
-    mask |= (7 << 12) | (1 << 3) | (0 << 2);
-  } else {
-    mask |= (0 << 12) | (0 << 3) | (1 << 2);
-  }
-  
-  while (x < (uint32_t) end) {
-    ttb[L1X(x)] = x | mask;
-    x += 1 << 20;
-  }
 }
 
 static void
@@ -197,7 +166,14 @@ mmu_switch_l2(struct l2 *l2, size_t len)
 	
 	for (i = 0; i < len; i++, l2++) {
 		if (l2->tab != nil) {
-			ttb[l2->va] = (uint32_t) l2->tab | L1_COARSE;
+			switch ((uint32_t) l2->tab & 1) {
+			case 0:
+				ttb[l2->va] = (uint32_t) l2->tab | L1_COARSE;
+				break;
+			case 1:
+				ttb[l2->va] = ((uint32_t) l2->tab & (~1)) | L1_SECTION;
+				break;
+			}
 		} else {
 			break;
 		}
@@ -255,6 +231,8 @@ l2_init(struct space *s, struct l2 *l2, reg_t l1)
 	return l2;
 }
 
+/* Has problem now that space can have sections and coarse. */
+
 static struct l2 *
 get_l2(space_t s, uint32_t l1, bool add)
 {
@@ -302,6 +280,9 @@ mapping_add(space_t s, reg_t pa, reg_t va,
 	
 	l2 = get_l2(s, L1X(va), true);
 	if (l2 == nil) {
+		return false;
+	} else if ((uint32_t) l2->tab & 1) {
+		/* Don't mess with coarse mappings. */
 		return false;
 	}
 	
@@ -378,14 +359,13 @@ kernel_addr(space_t s, reg_t addr, size_t len)
 	return (void *) pa;
 }
 
-
 reg_t
 get_ram_page(void)
 {
 	struct addr_holder *a;
 	size_t i;
 	
-	for (a = addrs; a != nil; a = a->next) {
+	for (a = ram; a != nil; a = a->next) {
 		for (i = 0; i < a->n; i++) {
 			if (a->addrs[i].len > 0 &&
 			    a->addrs[i].start >= (reg_t) &_ram_start &&
@@ -400,59 +380,57 @@ get_ram_page(void)
 	return nil;
 }
 
-reg_t
-get_io_page(reg_t addr)
+void
+imap(void *start, void *end, int ap, bool cachable)
 {
-	struct addr_holder *a;
-	size_t i;
-	
-	for (a = addrs; a != nil; a = a->next) {
-		for (i = 0; i < a->n; i++) {
-			if (a->addrs[i].len > 0 &&
-			    a->addrs[i].start <= addr &&
-			    a->addrs[i].start + a->addrs[i].len > addr) {
-			  
-			  if (a->addrs[i].start + a->addrs[i].len > addr + PAGE_SIZE) {
-			  	/* Add another spot for remainder of chunk. */
-			  	add_addr(addr + PAGE_SIZE, 
-			  	         a->addrs[i].start + a->addrs[i].len);
-			  }
-			  
-			  /* Shrink chunk. */
-			  a->addrs[i].len = addr - a->addrs[i].start;
-			  				
-				return addr;
-			}
-		}
-	}
-	
-	return nil;
-}
+  uint32_t x, mask;
 
-reg_t
-get_space_page(reg_t addr, space_t s)
-{
-	struct l2 *l2;
-	reg_t pa;
-	
-	l2 = get_l2(s, L1X(addr), false);
-	if (l2 == nil) {
-		return nil;
-	}
-	
-	if (l2->tab[L2X(addr)] == L2_FAULT) {
-		return nil;
-		
-	} else {
-		pa = (l2->tab[L2X(addr)] & PAGE_MASK);
-		l2->tab[L2X(addr)] = L2_FAULT;
-		return pa;
-	}
-}
+  x = (uint32_t) start & ~((1 << 20) - 1);
 
+  mask = (ap << 10) | L1_SECTION;
+
+  if (cachable) {
+    mask |= (7 << 12) | (1 << 3) | (0 << 2);
+  } else {
+    mask |= (0 << 12) | (0 << 3) | (1 << 2);
+  }
+  
+  while (x < (uint32_t) end) {
+    ttb[L1X(x)] = x | mask;
+    x += 1 << 20;
+  }
+}
 
 void
 give_proc0_world(proc_t p)
 {
+	uint32_t pa, va, mask;
+	space_t s;
+	int i;
+	
+	va = PROC0_RAM_START;
+	pa = (uint32_t) &_ram_start;
 
+	mask = (AP_RW_RW << 10);
+  mask |= (7 << 12) | (1 << 3) | (0 << 2);
+  mask |= 1;
+	
+	s = p->space;
+	for (i = 0; s->l2[i].tab != nil; i++)
+		;
+	
+	while (pa < (uint32_t) &_ram_end) {
+		if (i == s->l2len) {
+			s->next = space_new(get_ram_page());
+			s = s->next;
+			i = 0;
+		}
+		
+		s->l2[i].va = L1X(va);
+		s->l2[i].tab = (uint32_t *) (pa | mask);
+	 
+		i++;
+		pa += 1 << 20;
+		va += 1 << 20;
+	}
 }

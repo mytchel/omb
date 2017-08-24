@@ -29,122 +29,103 @@
 #include <mach.h>
 #include <sys.h>
 
+struct addr {
+	reg_t start;
+	size_t len;
+};
+
+struct addr_holder {
+	struct addr_holder *next;
+	size_t len, n;
+	struct addr addrs[];
+};
+
+static struct addr_holder *ram;
+static struct addr_holder *io;
+
+reg_t
+get_ram_page(void);
+
+void
+add_addr(struct addr_holder **a, reg_t start, reg_t end)
+{
+	struct addr_holder *h;
+
+	if ((*a)->n == (*a)->len) {
+		h = (struct addr_holder *) get_ram_page();
+		if (h == nil) {
+			return;
+		}
+		
+		h->next = *a;
+		*a = h;
+			
+		(*a)->n = 0;
+		(*a)->len = (PAGE_SIZE - sizeof(struct addr_holder))
+		                / sizeof(struct addr);
+		                
+		memset((*a)->addrs, 0, sizeof(struct addr) * (*a)->len);
+	}
+	
+	(*a)->addrs[(*a)->n].start = start;
+	(*a)->addrs[(*a)->n].len = end - start;
+	(*a)->n++;
+}
+
+reg_t
+get_ram_page(void)
+{
+	struct addr_holder *a;
+	size_t i;
+	
+	for (a = ram; a != nil; a = a->next) {
+		for (i = 0; i < a->n; i++) {
+			if (a->addrs[i].len > 0) {
+				a->addrs[i].len -= PAGE_SIZE;
+				return (a->addrs[i].start + a->addrs[i].len);
+			}
+		}
+	}
+	
+	return nil;
+}
+
+reg_t
+get_io_page(reg_t addr)
+{
+	struct addr_holder *a;
+	size_t i;
+	
+	for (a = io; a != nil; a = a->next) {
+		for (i = 0; i < a->n; i++) {
+			if (a->addrs[i].len > 0 &&
+			    a->addrs[i].start <= addr &&
+			    a->addrs[i].start + a->addrs[i].len > addr) {
+			  
+			  if (a->addrs[i].start + a->addrs[i].len > addr + PAGE_SIZE) {
+			  	/* Add another spot for remainder of chunk. */
+			  	add_addr(&io, addr + PAGE_SIZE, 
+			  	         a->addrs[i].start + a->addrs[i].len);
+			  }
+			  
+			  /* Shrink chunk. */
+			  a->addrs[i].len = addr - a->addrs[i].start;
+			  				
+				return addr;
+			}
+		}
+	}
+	
+	return nil;
+}
+
 static int
 handle_addr_request(int pid,
                     addr_req_t req,
                     addr_resp_t resp)
 {
+	
 	return ERR;
-#if 0
-	reg_t (*get_page_f)(reg_t, space_t);
-	space_t from, to;
-	reg_t pa, va;
-	proc_t other;
-	bool w, c;
-	size_t l;
-	
-	switch (req->from_type) {
-	case ADDR_REQ_from_ram:
-		get_page_f = (reg_t (*)(reg_t, space_t)) &get_ram_page;
-		from = nil;
-		break;
-			
-	case ADDR_REQ_from_io:
-		get_page_f = (reg_t (*)(reg_t, space_t)) &get_io_page;
-		from = nil;
-		break;
-		
-	case ADDR_REQ_from_local:
-		get_page_f = (reg_t (*)(reg_t, space_t)) &get_space_page;
-		from = p->space;
-		break;
-		
-	default:
-		return ERR;
-	}
-
-	switch (req->to_type) {
-	case ADDR_REQ_to_local:
-		to = p->space;
-		va = (reg_t) req->to_addr;
-		break;
-	
-	case ADDR_REQ_to_other:
-		other = find_proc(req->to);
-		if (other == nil) {
-			return ERR;
-		}
-		
-		to = other->space;
-		va = (reg_t) req->to_addr;
-		break;
-		
-	default:
-		return ERR;
-	}
-	
-	if (req->flags & ADDR_REQ_flag_write) {
-		if (req->flags & ADDR_REQ_flag_exec) {
-			return ERR;
-		} else {
-			w = true;
-		}
-	} else {
-		w = false;
-	}
-	
-	if (req->flags & ADDR_REQ_flag_cache) {
-		c = true;
-	} else {
-		c = false;
-	}
-	
-	for (l = 0; l < req->len; l += PAGE_SIZE) {		
-		pa = get_page_f((reg_t) req->from_addr + l, from);
-		if (pa == nil) {
-			return ERR;
-		}
-		
-		if (!mapping_add(to, pa, va + l, w, c)) {
-			return ERR;
-		}
-	}
-	
-	resp->va = (void *) va;
-	
-	return OK;
-#endif
-}
-
-static int
-handle_proc_request(int pid,
-                    proc_req_t req,
-                    proc_resp_t resp)
-{
-	return ERR;
-#if 0
-	reg_t space_page, page;
-	space_t space;
-	proc_t n;
-	
-	space_page = (reg_t) get_ram_page();
-	page = (reg_t) get_ram_page();
-	
-	space = space_new(space_page);
-		
-	if (!mapping_add(space, page, (reg_t) req->page_addr, true, false)) {
-		/* TODO: free pages. */
-		return ERR;
-	}
-	
-	n = proc_new(space, (void *) page);
-	
-	n->page_user = req->page_addr;
-	
-	resp->pid = n->pid;
-	
-	return OK;
-#endif
 }
 
 int
@@ -158,6 +139,29 @@ main(void)
 	
 	type = (message_t *) page->message_in;
 	
+	ram = (struct addr_holder *) PROC0_RAM_START;
+	io = (struct addr_holder *) get_ram_page();
+	io->next = nil;
+	io->n = 0;
+	io->len = (PAGE_SIZE - sizeof(struct addr_holder))
+	                / sizeof(struct addr);
+		
+	add_addr(&io, 0x47400000, 0x47404000); /* USB */
+  add_addr(&io, 0x44E31000, 0x44E32000); /* DMTimer1 */
+  add_addr(&io, 0x48042000, 0x48043000); /* DMTIMER3 */
+  add_addr(&io, 0x44E09000, 0x44E0A000); /* UART0 */
+  add_addr(&io, 0x48022000, 0x48023000); /* UART1 */
+  add_addr(&io, 0x48024000, 0x48025000); /* UART2 */
+  add_addr(&io, 0x44E07000, 0x44E08000); /* GPIO0 */
+  add_addr(&io, 0x4804c000, 0x4804d000); /* GPIO1 */
+  add_addr(&io, 0x481ac000, 0x481ad000); /* GPIO2 */
+  add_addr(&io, 0x481AE000, 0x481AF000); /* GPIO3 */
+  add_addr(&io, 0x48060000, 0x48061000); /* MMCHS0 */
+  add_addr(&io, 0x481D8000, 0x481D9000); /* MMC1 */
+  add_addr(&io, 0x47810000, 0x47820000); /* MMCHS2 */
+  add_addr(&io, 0x44E35000, 0x44E36000); /* Watchdog */
+  add_addr(&io, 0x44E05000, 0x44E06000); /* DMTimer0 */
+	
 	pid = recv();
 	
 	while (true) {
@@ -170,12 +174,6 @@ main(void)
 			ret = handle_addr_request(pid, 
 			                          (addr_req_t) page->message_in, 
 			                          (addr_resp_t) page->message_out);
-			break;
-		
-		case MESSAGE_proc:
-			ret = handle_proc_request(pid, 
-			                          (proc_req_t) page->message_in, 
-			                          (proc_resp_t) page->message_out);
 			break;
 		}
 		

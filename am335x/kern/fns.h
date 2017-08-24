@@ -56,22 +56,10 @@ void
 mmu_disable(void);
 
 void
-imap(void *, void *, int, bool);
-
-void
 mmu_load_ttb(uint32_t *);
 
 reg_t
-get_io_page(reg_t addr);
-
-reg_t
 get_ram_page(void);
-
-reg_t
-get_space_page(reg_t addr, space_t s);
-
-void
-add_addr(reg_t start, reg_t end);
 
 void
 give_proc0_world(proc_t p);

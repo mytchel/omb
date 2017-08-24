@@ -32,7 +32,10 @@ ksend(proc_t p)
 {
 	proc_t *pp;
 	
+	debug("%i ksend to %i\n", up->pid, p->pid);
+	
 	if (p->state == PROC_dead) {
+		debug("%i is dead, erroring\n", p->pid);
 		return ERR;
 	}
 	
@@ -62,6 +65,8 @@ krecv(void)
 {
 	proc_t w;
 	
+	debug("%i krecv\n", up->pid);
+	
 	while (true) {
 		w = up->waiting;
 	
@@ -89,6 +94,8 @@ int
 kreply(proc_t p,
        int ret)
 {
+	debug("%i kreply to %i\n", up->pid, p->pid);
+	
 	if (p->state != PROC_reply || p->waiting_on != up) {
 		return ERR;
 	}
@@ -109,6 +116,8 @@ proc_t
 kreply_recv(proc_t p,
             int ret)
 {
+	debug("%i kreply_recv to %i\n", up->pid, p->pid);
+	
 	if (p->state != PROC_reply || p->waiting_on != up) {
 		return nil;
 	}
@@ -117,9 +126,7 @@ kreply_recv(proc_t p,
 	       up->page->message_out,
 	       MESSAGE_LEN);
 	
-	debug("setting reply to %i\n", ret);
 	p->page->ret = ret;
-	debug("reply is %i\n", p->page->ret);
 	
 	up->state = PROC_recv;
 	schedule(p);
@@ -142,6 +149,7 @@ sys_send(int pid)
 	
 	p = find_proc(pid);
 	if (p == nil) {
+		debug("didnt find %i\n", pid);
 		return ERR;
 	}
 

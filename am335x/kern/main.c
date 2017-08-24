@@ -50,7 +50,7 @@ proc_start(void)
 {
 	label_t u;
 	
-	debug("in proc0/1 proc_start\n");
+	debug("in proc %i proc_start\n", up->pid);
 	
 	u.sp = USER_stack;
 	u.pc = USER_start;
@@ -80,7 +80,7 @@ init_proc(void *text, size_t tlen,
 	
 	pa = (reg_t) text;
 	for (o = 0;  o < tlen;  o += PAGE_SIZE, va += PAGE_SIZE) {
-		debug("map 0x%h to 0x%h\n", pa + o, va);
+		debug("map text 0x%h to 0x%h\n", pa + o, va);
 		if (!mapping_add(space, pa + o, va, false, true)) {
 			return nil;
 		}
@@ -89,7 +89,7 @@ init_proc(void *text, size_t tlen,
 	pa = (reg_t) data;
 	for (o = 0; o < dlen; o += PAGE_SIZE, va += PAGE_SIZE) {
 	
-		debug("map 0x%h to 0x%h\n", pa + o, va);
+		debug("map data 0x%h to 0x%h\n", pa + o, va);
 		if (!mapping_add(space, pa + o, va, true, true)) {
 			return nil;
 		}
@@ -98,7 +98,7 @@ init_proc(void *text, size_t tlen,
 	for (o = 0; o < blen; o += PAGE_SIZE, va += PAGE_SIZE) {
 		pa = (reg_t) get_ram_page();
 		memset((void *) pa, 0, PAGE_SIZE);
-		debug("map 0x%h to 0x%h\n", pa, va);
+		debug("map bss 0x%h to 0x%h\n", pa, va);
 		if (!mapping_add(space, pa, va, true, true)) {
 			return nil;
 		}
@@ -116,6 +116,8 @@ init_proc(void *text, size_t tlen,
 	
 	p = proc_new(space, (void *) page);
 	
+	debug("new proc has pid %i\n", p->pid);
+	
 	p->page_user = (void *) USER_stack;
 	
 	func_label(&p->label, p->kstack, KSTACK_LEN, &proc_start);
@@ -126,7 +128,7 @@ init_proc(void *text, size_t tlen,
 int
 kmain(void)
 {
-	proc_t p0, p1;
+	proc_t p0;
 	
   debug("OMB Booting...\n");
 
@@ -144,14 +146,14 @@ kmain(void)
 	
 	give_proc0_world(p0);
 	
-	p1 = init_proc(&_proc1_text_start,
+	init_proc(&_proc1_text_start,
 	              (size_t) &_proc1_text_end - (size_t) &_proc1_text_start,
 	               &_proc1_data_start,
 	              (size_t) &_proc1_data_end - (size_t) &_proc1_data_start,
 	               &_proc1_bss_start,
 	               (size_t) &_proc1_bss_end - (size_t) &_proc1_bss_start);
 	
-	schedule(p1);
+	schedule(p0);
   
   /* Never reached */
   return 0;

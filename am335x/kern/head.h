@@ -29,9 +29,6 @@
 #include <mach.h>
 #include "trap.h"
 
-#define PAGE_ALIGN(x)    (((x) + PAGE_SIZE - 1) & PAGE_MASK)
-#define PAGE_ALIGN_DN(x) (((x) - PAGE_SIZE + 1) & PAGE_MASK)
-
 typedef enum {
   INTR_on  = (uint32_t) 0,
   INTR_off = (uint32_t) MODE_DI,
@@ -40,6 +37,8 @@ typedef enum {
 typedef struct space *space_t;
 
 struct l2 {
+	/* If bit 0 is 1 this is a large section. 
+	 * Else small section. */
 	uint32_t va;
 	uint32_t *tab;
 };

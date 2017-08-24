@@ -48,6 +48,7 @@ struct proc_page {
 proc_page_t
 get_proc_page(void);
 
+
 int
 send(int pid);
 
@@ -61,6 +62,20 @@ reply(int pid,
 int
 reply_recv(int pid,
            int ret);
+
+
+int
+map_offer(int pid, 
+          void *start,
+          size_t len,
+          int flags);
+
+int
+map_recv(size_t *len, int *flags);
+
+int
+map_reply(int pid, void *start, int flags);
+
 
 bool
 cas(void *addr, void *old, void *new);
