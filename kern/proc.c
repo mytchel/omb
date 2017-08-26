@@ -153,7 +153,7 @@ proc_start(void)
 	label_t u;
 	proc_t p;
 	
-	p = krecv();
+	p = krecv(PID_ALL);
 	if (p == nil) {
 		/* Do something. */
 	}

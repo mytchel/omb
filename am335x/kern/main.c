@@ -73,14 +73,16 @@ init_proc(void *text, size_t tlen,
 	
 	pa = (reg_t) text;
 	for (o = 0;  o < tlen;  o += PAGE_SIZE, va += PAGE_SIZE) {
-		if (!mapping_add(space, pa + o, va, false, true)) {
+		if (!mapping_add(space, pa + o, va, 
+		                 ADDR_read|ADDR_exec|ADDR_cache)) {
 			return nil;
 		}
 	}
 	
 	pa = (reg_t) data;
 	for (o = 0; o < dlen; o += PAGE_SIZE, va += PAGE_SIZE) {
-		if (!mapping_add(space, pa + o, va, true, true)) {
+		if (!mapping_add(space, pa + o, va, 
+		                 ADDR_read|ADDR_write|ADDR_cache)) {
 			return nil;
 		}
 	}
@@ -88,18 +90,21 @@ init_proc(void *text, size_t tlen,
 	for (o = 0; o < blen; o += PAGE_SIZE, va += PAGE_SIZE) {
 		pa = (reg_t) get_ram_page();
 		memset((void *) pa, 0, PAGE_SIZE);
-		if (!mapping_add(space, pa, va, true, true)) {
+		if (!mapping_add(space, pa, va, 
+		                 ADDR_read|ADDR_write|ADDR_cache)) {
 			return nil;
 		}
 	}
 	
 	stack = (reg_t) get_ram_page();
-	if (!mapping_add(space, stack, USER_stack - PAGE_SIZE, true, false)) {
+	if (!mapping_add(space, stack, USER_stack - PAGE_SIZE, 
+		                 ADDR_read|ADDR_write|ADDR_cache)) {
 		return nil;
 	}
 	
 	page = (reg_t) get_ram_page();
-	if (!mapping_add(space, page, USER_stack, true, false)) {
+	if (!mapping_add(space, page, USER_stack, 
+		                 ADDR_read|ADDR_write)) {
 		return nil;
 	}
 	

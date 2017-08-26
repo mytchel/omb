@@ -162,7 +162,7 @@ main(void)
   add_addr(&io, 0x44E35000, 0x44E36000); /* Watchdog */
   add_addr(&io, 0x44E05000, 0x44E06000); /* DMTimer0 */
 	
-	pid = recv();
+	pid = recv(PID_ALL);
 	
 	while (true) {
 		switch (*type) {
@@ -177,7 +177,7 @@ main(void)
 			break;
 		}
 		
-		pid = reply_recv(pid, ret);
+		pid = reply_recv(pid, ret, PID_ALL);
 	}
 }
 

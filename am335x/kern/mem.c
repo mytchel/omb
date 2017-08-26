@@ -28,6 +28,11 @@
 #include <head.h>
 #include "fns.h"
 
+#define AP_NO_NO	0
+#define AP_RW_NO	1
+#define AP_RW_RO	2
+#define AP_RW_RW	3
+
 #define L1X(va)          ((va) >> 20)
 #define L2X(va)          (((va) >> 12) & ((1 << 8) - 1))
 #define PAL1(entry)      ((entry) & 0xffffffc00)
@@ -269,9 +274,7 @@ get_l2(space_t s, uint32_t l1, bool add)
 }
 
 bool
-mapping_add(space_t s, reg_t pa, reg_t va, 
-            bool write, 
-            bool cache)
+mapping_add(space_t s, reg_t pa, reg_t va, int flags)
 {
 	uint32_t tex, ap, c, b;
 	struct l2 *l2;
@@ -286,13 +289,13 @@ mapping_add(space_t s, reg_t pa, reg_t va,
 	
 	/* Read writeable, no caching. */
 	
-	if (write) {
+	if (flags & ADDR_write) {
 		ap = AP_RW_RW;
 	} else {
 		ap = AP_RW_RO;
 	}
 	
-	if (cache) {
+	if (flags & ADDR_cache) {
 		tex = 7;
 		c = 1;
 		b = 0;
@@ -309,10 +312,10 @@ mapping_add(space_t s, reg_t pa, reg_t va,
 }
 
 reg_t
-mapping_remove(space_t s, reg_t va)
+mapping_find(space_t s, reg_t va, int *flags)
 {
 	struct l2 *l2;
-	reg_t pa;
+	reg_t v;
 	
 	l2 = get_l2(s, L1X(va), false);
 	if (l2 == nil) {
@@ -320,41 +323,43 @@ mapping_remove(space_t s, reg_t va)
 	}
 	
 	if (l2->tab[L2X(va)] != L2_FAULT) {
-		pa = l2->tab[L2X(va)] & PAGE_MASK;
-		l2->tab[L2X(va)] = L2_FAULT;
-		return pa;
+		v = l2->tab[L2X(va)];
+		
+		*flags = ADDR_read | ADDR_exec;
+		
+		if (((va >> 4) & 3) == AP_RW_RW) {
+			*flags |= ADDR_write;
+		}
+		
+		if (((va >> 2) & 1) == 1) {
+			*flags |= ADDR_cache;
+		}
+		
+		return v & PAGE_MASK;
 	} else {
 		return nil;
 	}
 }
 
-void *
-kernel_addr(space_t s, reg_t addr, size_t len)
+reg_t
+mapping_remove(space_t s, reg_t va)
 {
-	reg_t va, pa, off;
 	struct l2 *l2;
-	size_t l;
+	reg_t v;
 	
-	va = addr & PAGE_MASK;
-	off = addr - va;
-	
-	pa = 0;
-	for (l = 0; l < off + len; l += PAGE_SIZE) {
-		l2 = get_l2(s, L1X(va + l), false);
-		if (l2 == nil) {
-			return nil;
-		}
-	
-		if (l2->tab[L2X(va)] == L2_FAULT) {
-			return nil;
-			
-		} else if (l == 0) {
-			pa = (l2->tab[L2X(va)] & PAGE_MASK)
-			    + off;
-		}		
+	l2 = get_l2(s, L1X(va), false);
+	if (l2 == nil) {
+		return nil;
 	}
 	
-	return (void *) pa;
+	if (l2->tab[L2X(va)] != L2_FAULT) {
+		v = l2->tab[L2X(va)];
+		l2->tab[L2X(va)] = L2_FAULT;
+		
+		return v & PAGE_MASK;
+	} else {
+		return nil;
+	}
 }
 
 reg_t

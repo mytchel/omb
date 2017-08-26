@@ -28,11 +28,6 @@
 #ifndef _FNS_H
 #define _FNS_H
 
-#define AP_NO_NO	0
-#define AP_RW_NO	1
-#define AP_RW_RO	2
-#define AP_RW_RW	3
-
 uint32_t
 fsr_status(void);
 

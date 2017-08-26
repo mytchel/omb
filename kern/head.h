@@ -44,6 +44,7 @@ struct proc_list {
 struct page {
 	int section_id;
 	reg_t pa, va;
+	size_t pos;
 };
 
 struct page_list {
@@ -55,7 +56,8 @@ struct page_list {
 struct section {
 	int id;
 	int flags;
-	int creator_pid;
+	size_t len;
+	proc_t creator;
 	proc_list_t granted;
 };
 
@@ -102,11 +104,17 @@ find_proc(int pid);
 void
 schedule(proc_t next);
 
+bool
+proc_list_add(proc_list_t *list, proc_t p);
+
+proc_t
+proc_list_remove(proc_list_t *list, int pid);
+
 int
 ksend(proc_t p);
 
 proc_t
-krecv(void);
+krecv(int pid);
 
 int
 kreply(proc_t p,
@@ -114,16 +122,31 @@ kreply(proc_t p,
 
 proc_t
 kreply_recv(proc_t p,
-            int ret);
+            int ret,
+            int pid);
             
 section_t
 section_find(int id);
 
 int
-section_new(int creator, int flags);
+section_new(int creator, size_t len, int flags);
 
 void
 section_free(int id);
+
+bool
+page_list_add(page_list_t list, int s_id, size_t off,
+              reg_t pa, reg_t va);
+
+page_t
+page_list_find(page_list_t list, int s_id, size_t off);
+
+page_t
+page_list_find_pa(page_list_t list, reg_t pa);
+
+bool
+page_list_remove(page_list_t list, int s_id, size_t off,
+                 reg_t *va, reg_t *pa);
 
 /* Machine dependant. */
 
@@ -159,13 +182,13 @@ space_new(reg_t page);
 
 bool
 mapping_add(space_t s, reg_t pa, reg_t va,
-            bool write, bool cache);
+            int flags);
+
+reg_t
+mapping_find(space_t s, reg_t va, int *flags);
 
 reg_t
 mapping_remove(space_t s, reg_t va);
-
-void *
-kernel_addr(space_t s, reg_t addr, size_t len);
 
 void
 mmu_switch(space_t s);

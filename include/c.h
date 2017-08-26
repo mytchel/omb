@@ -46,12 +46,13 @@ struct proc_page {
 proc_page_t
 get_proc_page(void);
 
+#define PID_ALL        -1
 
 int
 send(int pid);
 
 int
-recv(void);
+recv(int pid);
 
 int
 reply(int pid,
@@ -59,23 +60,28 @@ reply(int pid,
 
 int
 reply_recv(int pid,
-           int ret);
+           int ret,
+           int rpid);
 
+#define ADDR_read     (1<<0)
+#define ADDR_write    (1<<1)
+#define ADDR_exec     (1<<2)
+#define ADDR_cache    (1<<3)
 
 int
-sys_section_create(void *start,
+section_create(void *start,
                    size_t len,
                    int flags);
 
 int
-sys_section_grant(int pid, int id, bool unmap);
+section_grant(int pid, int id, bool unmap);
 
 int
-sys_section_map(int id, void *start, size_t off,
+section_map(int id, void *start, size_t off,
                 size_t len, int flags);
 
 int
-sys_section_revoke(int id);
+section_revoke(int id, int pid);
 
 bool
 cas(void *addr, void *old, void *new);
