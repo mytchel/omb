@@ -54,9 +54,9 @@ struct addr_resp {
 	message_t type; /* = MESSAGE_addr */
 };
 
-
-
 ASSERT_MESSAGE_SIZE(addr_resp);
+
+
 
 struct proc_init_req {
 	message_t type; /* = MESSAGE_proc_init */

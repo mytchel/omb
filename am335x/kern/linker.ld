@@ -39,25 +39,7 @@ SECTIONS
 		*(.proc0.bss)
 		_proc0_bss_end = .;
 	}
-	
-	.proc1 ALIGN(4096) :
-	{	
-		_proc1_text_start = .;
-		*(.proc1.text)
-		_proc1_text_end = .;
-		. = ALIGN(4096);
-	
-		_proc1_data_start = .;
-		*(.proc1.data)
-		_proc1_data_end = .;
-		. = ALIGN(4096);
-	
-		_proc1_bss_start = .;
-		*(.proc1.bss)
-		_proc1_bss_end = .;
-		. = ALIGN(4096);
-	}
-		
+			
 	.bss ALIGN(4096) : 
 	{
 		_kernel_bss_start = .;

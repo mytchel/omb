@@ -153,6 +153,8 @@ space_new(reg_t page)
 static struct l2 *
 l2_init(struct space *s, struct l2 *l2, reg_t l1)
 {
+	return nil;
+	/*
 	uint32_t *tab;
 	
 	tab = (uint32_t *) get_ram_page();
@@ -170,13 +172,13 @@ l2_init(struct space *s, struct l2 *l2, reg_t l1)
 	}
 	
 	return l2;
+	*/
 }
 
 static struct l2 *
 get_l2(space_t s, uint32_t l1, bool add)
 {
 	space_t ss;
-	reg_t page;
 	size_t i;
 	
 	for (ss = s; ss != nil; ss = ss->next) {
@@ -193,6 +195,8 @@ get_l2(space_t s, uint32_t l1, bool add)
 		return nil;
 	}
 	
+	return nil;
+	/*
 	page = (reg_t) get_ram_page();
 	if (page == nil) {
 		return nil;
@@ -207,6 +211,7 @@ get_l2(space_t s, uint32_t l1, bool add)
 	s->next = ss;
 	
 	return l2_init(s, &ss->l2[0], l1);
+	*/
 }
 
 bool
@@ -345,28 +350,116 @@ give_proc_section(proc_t p, reg_t start, reg_t end, int flags)
 	}
 }
 
-void
-give_proc0_world(proc_t p0)
+extern void *_proc0_text_start;
+extern void *_proc0_text_end;
+extern void *_proc0_data_start;
+extern void *_proc0_data_end;
+
+static uint8_t proc0_space_page[PAGE_SIZE]__attribute__((__aligned__(PAGE_SIZE)));
+static uint8_t proc0_ttb_page[PAGE_SIZE]__attribute__((__aligned__(PAGE_SIZE)));
+static uint8_t proc0_page_list_page[PAGE_SIZE]__attribute__((__aligned__(PAGE_SIZE)));
+static uint8_t proc0_page_page[PAGE_SIZE]__attribute__((__aligned__(PAGE_SIZE)));
+static uint8_t proc0_stack_page[PAGE_SIZE]__attribute__((__aligned__(PAGE_SIZE)));
+
+static void
+proc0_start(void)
 {
-	give_proc_section(p0, (reg_t) &_ram_start, (reg_t) &_kernel_start,
+	label_t u = {0};
+	
+	u.sp = 0x1000;
+	u.pc = 0x3000;
+	
+	drop_to_user(&u, up->kstack, KSTACK_LEN);
+}
+
+proc_t
+init_proc0(void)
+{
+	page_list_t page_list;
+	reg_t va, pa, o;
+	space_t space;
+	proc_t p;
+	
+	space = space_new((reg_t) proc0_space_page);
+	
+	page_list = (page_list_t) proc0_page_list_page;
+	page_list->next = nil;
+	page_list->len = (PAGE_SIZE - sizeof(struct page_list)) / sizeof(struct page);
+	memset(page_list->pages, 0, page_list->len * sizeof(struct page));
+	
+	p = proc_new(space, page_list, (void *) proc0_page_page);
+	if (p == nil) {
+		panic("Failed to create proc0!\n");
+	}
+	
+	func_label(&p->label, p->kstack, KSTACK_LEN, &proc0_start);
+
+	space->l2[0].va = L1X(0x1000);
+	space->l2[0].tab = (uint32_t *) proc0_ttb_page;
+
+	/* Stack at 0x1000. */
+	if (!mapping_add(space, (reg_t) proc0_stack_page, 0x1000, 
+		                 ADDR_read|ADDR_write|ADDR_cache)) {
+		panic("failed to map 0x%h to 0x%h for initial proc!\n",
+			    proc0_stack_page, 0x1000);
+	}
+	
+	/* proc page at 0x2000. */
+	p->page_user = (void *) 0x2000;
+	if (!mapping_add(space, (reg_t) proc0_page_page, 0x2000, 
+		                 ADDR_read|ADDR_write)) {
+		panic("failed to map 0x%h to 0x%h for initial proc!\n",
+			    proc0_page_page, 0x2000);
+	}
+	
+	/* text and data at 0x3000. */
+	va = 0x3000;
+	
+	pa = (reg_t) &_proc0_text_start;
+	for (o = 0;  
+	     (reg_t) &_proc0_text_start + o < (reg_t) &_proc0_text_end;
+	     o += PAGE_SIZE, va += PAGE_SIZE) {
+	     
+		if (!mapping_add(space, pa + o, va, 
+		                 ADDR_read|ADDR_exec|ADDR_cache)) {
+			panic("failed to map 0x%h to 0x%h for initial proc!\n",
+			      pa + o, va);
+		}
+	}
+	
+	pa = (reg_t) &_proc0_data_start;
+	for (o = 0;  
+	     (reg_t) &_proc0_data_start + o < (reg_t) &_proc0_data_end;
+	     o += PAGE_SIZE, va += PAGE_SIZE) {
+	     
+		if (!mapping_add(space, pa + o, va, 
+		                 ADDR_read|ADDR_write|ADDR_cache)) {
+			panic("failed to map 0x%h to 0x%h for initial proc!\n",
+			      pa + o, va);
+		}
+	}
+	
+	give_proc_section(p, (reg_t) &_ram_start, (reg_t) &_kernel_start,
 	                  ADDR_read|ADDR_write|ADDR_cache);
 	                  
-	give_proc_section(p0, (reg_t) &_kernel_end, (reg_t) &_ram_end,
+	give_proc_section(p, (reg_t) &_kernel_end, (reg_t) &_ram_end,
 	                  ADDR_read|ADDR_write|ADDR_cache);
 	                  	
-  give_proc_section(p0, 0x47400000, 0x47404000, ADDR_read|ADDR_write); /* USB */
-  give_proc_section(p0, 0x44E31000, 0x44E32000, ADDR_read|ADDR_write); /* DMTimer1 */
-  give_proc_section(p0, 0x48042000, 0x48043000, ADDR_read|ADDR_write); /* DMTIMER3 */
-  give_proc_section(p0, 0x44E09000, 0x44E0A000, ADDR_read|ADDR_write); /* UART0 */
-  give_proc_section(p0, 0x48022000, 0x48023000, ADDR_read|ADDR_write); /* UART1 */
-  give_proc_section(p0, 0x48024000, 0x48025000, ADDR_read|ADDR_write); /* UART2 */
-  give_proc_section(p0, 0x44E07000, 0x44E08000, ADDR_read|ADDR_write); /* GPIO0 */
-  give_proc_section(p0, 0x4804c000, 0x4804d000, ADDR_read|ADDR_write); /* GPIO1 */
-  give_proc_section(p0, 0x481ac000, 0x481ad000, ADDR_read|ADDR_write); /* GPIO2 */
-  give_proc_section(p0, 0x481AE000, 0x481AF000, ADDR_read|ADDR_write); /* GPIO3 */
-  give_proc_section(p0, 0x48060000, 0x48061000, ADDR_read|ADDR_write); /* MMCHS0 */
-  give_proc_section(p0, 0x481D8000, 0x481D9000, ADDR_read|ADDR_write); /* MMC1 */
-  give_proc_section(p0, 0x47810000, 0x47820000, ADDR_read|ADDR_write); /* MMCHS2 */
-  give_proc_section(p0, 0x44E35000, 0x44E36000, ADDR_read|ADDR_write); /* Watchdog */
-  give_proc_section(p0, 0x44E05000, 0x44E06000, ADDR_read|ADDR_write); /* DMTimer0 */
+  give_proc_section(p, 0x47400000, 0x47404000, ADDR_read|ADDR_write); /* USB */
+  give_proc_section(p, 0x44E31000, 0x44E32000, ADDR_read|ADDR_write); /* DMTimer1 */
+  give_proc_section(p, 0x48042000, 0x48043000, ADDR_read|ADDR_write); /* DMTIMER3 */
+  give_proc_section(p, 0x44E09000, 0x44E0A000, ADDR_read|ADDR_write); /* UART0 */
+  give_proc_section(p, 0x48022000, 0x48023000, ADDR_read|ADDR_write); /* UART1 */
+  give_proc_section(p, 0x48024000, 0x48025000, ADDR_read|ADDR_write); /* UART2 */
+  give_proc_section(p, 0x44E07000, 0x44E08000, ADDR_read|ADDR_write); /* GPIO0 */
+  give_proc_section(p, 0x4804c000, 0x4804d000, ADDR_read|ADDR_write); /* GPIO1 */
+  give_proc_section(p, 0x481ac000, 0x481ad000, ADDR_read|ADDR_write); /* GPIO2 */
+  give_proc_section(p, 0x481AE000, 0x481AF000, ADDR_read|ADDR_write); /* GPIO3 */
+  give_proc_section(p, 0x48060000, 0x48061000, ADDR_read|ADDR_write); /* MMCHS0 */
+  give_proc_section(p, 0x481D8000, 0x481D9000, ADDR_read|ADDR_write); /* MMC1 */
+  give_proc_section(p, 0x47810000, 0x47820000, ADDR_read|ADDR_write); /* MMCHS2 */
+  give_proc_section(p, 0x44E35000, 0x44E36000, ADDR_read|ADDR_write); /* Watchdog */
+  give_proc_section(p, 0x44E05000, 0x44E06000, ADDR_read|ADDR_write); /* DMTimer0 */
+  
+  return p;
 }

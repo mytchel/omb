@@ -53,12 +53,6 @@ mmu_disable(void);
 void
 mmu_load_ttb(uint32_t *);
 
-reg_t
-get_ram_page(void);
-
-void
-give_proc0_world(proc_t p);
-
 /* Initialisation functions */
 
 void
