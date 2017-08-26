@@ -37,20 +37,20 @@ typedef struct page_list *page_list_t;
 typedef struct section *section_t;
 
 struct proc_list {
-	proc_t p;
+	proc_t proc;
 	proc_list_t next;
 };
 
 struct page {
 	int section_id;
+	size_t off, len;
 	reg_t pa, va;
-	size_t pos;
 };
 
 struct page_list {
 	page_list_t next;
 	size_t len;
-	page_t pages[];
+	struct page pages[];
 };
 
 struct section {
@@ -96,6 +96,7 @@ struct proc {
 
 proc_t
 proc_new(space_t space, 
+         page_list_t page_list,
          void *sys_page);
 
 proc_t
@@ -129,14 +130,16 @@ section_t
 section_find(int id);
 
 int
-section_new(int creator, size_t len, int flags);
+section_new(proc_t creator, size_t len, int flags);
 
 void
 section_free(int id);
 
 bool
-page_list_add(page_list_t list, int s_id, size_t off,
-              reg_t pa, reg_t va);
+page_list_add(page_list_t list, int s_id,
+              reg_t pa, reg_t va,
+              size_t off, size_t len);
+
 
 page_t
 page_list_find(page_list_t list, int s_id, size_t off);
@@ -145,13 +148,18 @@ page_t
 page_list_find_pa(page_list_t list, reg_t pa);
 
 bool
-page_list_remove(page_list_t list, int s_id, size_t off,
-                 reg_t *va, reg_t *pa);
+page_list_remove(page_list_t list, int s_id,
+                 size_t off,
+                 reg_t *va, reg_t *pa,
+                 size_t *len);
 
 /* Machine dependant. */
 
 int
 debug(const char *fmt, ...);
+
+void
+panic(const char *fmt, ...);
 
 void
 set_systick(uint32_t ms);

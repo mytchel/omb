@@ -29,6 +29,10 @@
 #include <mach.h>
 #include "trap.h"
 
+#define MAX_PROCS          512
+#define MAX_PROC_LISTS    2048
+#define MAX_SECTIONS      2048
+
 typedef enum {
   INTR_on  = (uint32_t) 0,
   INTR_off = (uint32_t) MODE_DI,

@@ -221,7 +221,10 @@ sys_section_create(reg_t start,
 	size_t off;
 	reg_t pa;
 	
-	s_id = section_new(up->pid, len, flags);
+	debug("%i section_create 0x%h of size %i flags 0b%b\n",
+	      up->pid, start, len, flags);
+	
+	s_id = section_new(up, len, flags);
 	if (s_id < 0) {
 		return ERR;
 	}
@@ -233,7 +236,8 @@ sys_section_create(reg_t start,
 			return ERR;
 		}
 		
-		if (!page_list_add(up->page_list, s_id, off,
+		if (!page_list_add(up->page_list, s_id, 
+		                   off, PAGE_SIZE,
 		                   pa, start + off)) {
 			/* Do something. */
 			return ERR;
@@ -251,6 +255,9 @@ sys_section_grant(int pid, int s_id, bool unmap)
 	proc_t dest;
 	size_t off;
 	
+	debug("%i section_grant to %i section %i unmap %i\n",
+	      up->pid, pid, s_id, unmap);
+	
 	s = section_find(s_id);
 	if (s == nil) {
 		return ERR;
@@ -261,22 +268,26 @@ sys_section_grant(int pid, int s_id, bool unmap)
 		return ERR;
 	}
 	
-	for (off = 0; off < s->len; off += PAGE_SIZE) {
+	if (!proc_list_add(&s->granted, dest)) {
+		return ERR;
+	}
+	
+	off = 0;
+	while (off < s->len) {
 		page = page_list_find(up->page_list, s_id, off);
 		if (page == nil) {
 			/* Do something. */
 			return ERR;
 		}
 		
-		if (!page_list_add(dest->page_list, s_id, off,
+		if (!page_list_add(dest->page_list, s_id, 
+		                   off, page->len,
 		                   page->pa, nil)) {
 			/* Do something. */
 			return ERR;
 		}
-	}
 		
-	if (!proc_list_add(&s->granted, dest)) {
-		return ERR;
+		off += page->len;
 	}
 	
 	for (off = 0; unmap && off < s->len; off += PAGE_SIZE) {
@@ -299,26 +310,38 @@ sys_section_map(int s_id, reg_t start, size_t off,
 {
 	section_t s;
 	page_t page;
-	size_t o;
+	size_t o, oo;
 	
-	/* TODO: check if space is safe to map. */
+	debug("%i section_map section %i at 0x%h with offset 0x%h len %i and flags 0b%b\n",
+	      up->pid, s_id, start, off, len, flags);
 	
 	s = section_find(s_id);
-	if (s == nil || !check_flags(s->flags, flags)) {
+	if (s == nil) {
+		return ERR;
+	} else if (!check_flags(s->flags, flags)) {
+		return ERR;
+	} else if (off + len > s->len) {
 		return ERR;
 	}
 	
-	for (o = 0; o < len; o += PAGE_SIZE) {
+	o = 0;
+	while (o < len) {
 		page = page_list_find(up->page_list, s_id, off + o);
 		if (page == nil) {
-			/* Do something. */
 			return ERR;
 		}
 		
-		if (!mapping_add(up->space, page->pa, start + o, flags)) {
-			/* Do something. */
-			return ERR;
+		oo = 0;
+		while (o + oo < len && oo < page->len) {
+			if (!mapping_add(up->space, page->pa + oo, 
+			                 start + o + oo, flags)) {
+				return ERR;
+			}
+			
+			oo += PAGE_SIZE;
 		}
+		
+		o += oo;
 	}
 	
 	return OK;
@@ -327,21 +350,22 @@ sys_section_map(int s_id, reg_t start, size_t off,
 int
 proc_section_revoke(section_t s, proc_t p)
 {
+	size_t off, len, o;
 	section_t sn;
 	reg_t va, pa;
 	page_t page;
-	size_t off;
 	proc_t pn;
 	
 	for (off = 0; off < s->len; off += PAGE_SIZE) {
-		if (!page_list_remove(p->page_list,
-		                      s->id, off, &va, &pa)) {
+		if (!page_list_remove(p->page_list, s->id, off, 
+		                      &va, &pa, &len)) {
 			/* Do something. */
 			return ERR;
 		}
 			
 		if (va != nil) {
-			mapping_remove(p->space, va);
+			for (o = 0; o < len; o += PAGE_SIZE) 
+				mapping_remove(p->space, va + o);
 		}
 			
 		while ((page = page_list_find_pa(p->page_list, pa)) != nil) {
@@ -367,8 +391,12 @@ sys_section_revoke(int s_id, int pid)
 	section_t s;
 	proc_t p;
 	
+	debug("%i section_revoke section %i from %i\n", up->pid, s_id, pid);
+	
 	s = section_find(s_id);
 	if (s == nil) {
+		return ERR;
+	} else if (s->creator != up) {
 		return ERR;
 	}
 	

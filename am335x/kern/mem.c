@@ -50,17 +50,6 @@
 #define L2_SMALL     0b10
 #define L2_TINY      0b11
 
-struct addr {
-	reg_t start;
-	size_t len;
-};
-
-struct addr_holder {
-	struct addr_holder *next;
-	size_t len, n;
-	struct addr addrs[];
-};
-
 void
 imap(void *, void *, int, bool);
 
@@ -70,53 +59,12 @@ ttb[4096]__attribute__((__aligned__(16*1024))) = { L1_FAULT };
 extern uint32_t *_ram_start;
 extern uint32_t *_ram_end;
 
-static struct addr_holder *ram = nil;
-
 static space_t space = nil;
-
-void
-add_addr(struct addr_holder **a, reg_t start, reg_t end)
-{
-	struct addr_holder *h;
-
-	if ((*a)->n == (*a)->len) {
-		h = (struct addr_holder *) get_ram_page();
-		if (h == nil) {
-			return;
-		}
-		
-		h->next = *a;
-		*a = h;
-			
-		(*a)->n = 0;
-		(*a)->len = (PAGE_SIZE - sizeof(struct addr_holder))
-		                / sizeof(struct addr);
-		                
-		memset((*a)->addrs, 0, sizeof(struct addr) * (*a)->len);
-	}
-	
-	(*a)->addrs[(*a)->n].start = start;
-	(*a)->addrs[(*a)->n].len = end - start;
-	(*a)->n++;
-}
 
 void
 init_memory(void)
 {
   int i;
-  
-  ram = (struct addr_holder *) &_ram_start;
-	ram->next = nil;
-			
-	ram->n = 0;
-	ram->len = (PAGE_SIZE - sizeof(struct addr_holder))
-	                / sizeof(struct addr);
-		
-  add_addr(&ram, (uint32_t) &_ram_start + PAGE_SIZE, 
-           (uint32_t) &_kernel_start);
-  
-  add_addr(&ram, (uint32_t) PAGE_ALIGN(&_kernel_end),
-	         (uint32_t) &_ram_end);
 
   for (i = 0; i < 4096; i++)
     ttb[i] = L1_FAULT;
@@ -126,14 +74,11 @@ init_memory(void)
   /* Give kernel unmapped access to all of ram. */	
   imap(&_ram_start, &_ram_end, AP_RW_NO, true);
 
-  /* UART0, given to both kernel and possibly user. This may change */
-  imap((void *) 0x44E09000, (void *) 0x44E0A000, AP_RW_NO, false);
-  /* Watchdog */
-  imap((void *) 0x44E35000, (void *) 0x44E36000, AP_RW_NO, false);
-  /* DMTIMER2 for systick. */
-  imap((void *) 0x48040000, (void *) 0x48041000, AP_RW_NO, false);
-  /* INTCPS */
-  imap((void *) 0x48200000, (void *) 0x48201000, AP_RW_NO, false);
+	/* TODO: These should be small pages not sections. */
+  imap((void *) 0x44E09000, (void *) 0x44E0A000, AP_RW_NO, false); /* UART0 */
+  imap((void *) 0x44E35000, (void *) 0x44E36000, AP_RW_NO, false); /* Watchdog */
+  imap((void *) 0x48040000, (void *) 0x48041000, AP_RW_NO, false); /* DMTIMER2 for systick. */
+  imap((void *) 0x48200000, (void *) 0x48201000, AP_RW_NO, false); /* INTCPS */
 
   mmu_enable();
 }
@@ -169,14 +114,7 @@ mmu_switch_l2(struct l2 *l2, size_t len)
 	
 	for (i = 0; i < len; i++, l2++) {
 		if (l2->tab != nil) {
-			switch ((uint32_t) l2->tab & 1) {
-			case 0:
-				ttb[l2->va] = (uint32_t) l2->tab | L1_COARSE;
-				break;
-			case 1:
-				ttb[l2->va] = ((uint32_t) l2->tab & (~1)) | L1_SECTION;
-				break;
-			}
+			ttb[l2->va] = (uint32_t) l2->tab | L1_COARSE;
 		} else {
 			break;
 		}
@@ -234,8 +172,6 @@ l2_init(struct space *s, struct l2 *l2, reg_t l1)
 	return l2;
 }
 
-/* Has problem now that space can have sections and coarse. */
-
 static struct l2 *
 get_l2(space_t s, uint32_t l1, bool add)
 {
@@ -278,6 +214,10 @@ mapping_add(space_t s, reg_t pa, reg_t va, int flags)
 {
 	uint32_t tex, ap, c, b;
 	struct l2 *l2;
+	
+	if ((reg_t) &_kernel_start <= va && va <= (reg_t) &_kernel_end) {
+		return false;
+	}
 	
 	l2 = get_l2(s, L1X(va), true);
 	if (l2 == nil) {
@@ -362,27 +302,6 @@ mapping_remove(space_t s, reg_t va)
 	}
 }
 
-reg_t
-get_ram_page(void)
-{
-	struct addr_holder *a;
-	size_t i;
-	
-	for (a = ram; a != nil; a = a->next) {
-		for (i = 0; i < a->n; i++) {
-			if (a->addrs[i].len > 0 &&
-			    a->addrs[i].start >= (reg_t) &_ram_start &&
-			    a->addrs[i].start + a->addrs[i].len <= (reg_t) &_ram_end) {
-				
-				a->addrs[i].len -= PAGE_SIZE;
-				return (a->addrs[i].start + a->addrs[i].len);
-			}
-		}
-	}
-	
-	return nil;
-}
-
 void
 imap(void *start, void *end, int ap, bool cachable)
 {
@@ -404,36 +323,50 @@ imap(void *start, void *end, int ap, bool cachable)
   }
 }
 
-void
-give_proc0_world(proc_t p)
+static void
+give_proc_section(proc_t p, reg_t start, reg_t end, int flags)
 {
-	uint32_t pa, va, mask;
-	space_t s;
-	int i;
+	size_t len;
+	int s_id;
 	
-	va = PROC0_RAM_START;
-	pa = (uint32_t) &_ram_start;
-
-	mask = (AP_RW_RW << 10);
-  mask |= (7 << 12) | (1 << 3) | (0 << 2);
-  mask |= 1;
+	len = end - start;
 	
-	s = p->space;
-	for (i = 0; s->l2[i].tab != nil; i++)
-		;
-	
-	while (pa < (uint32_t) &_ram_end) {
-		if (i == s->l2len) {
-			s->next = space_new(get_ram_page());
-			s = s->next;
-			i = 0;
-		}
-		
-		s->l2[i].va = L1X(va);
-		s->l2[i].tab = (uint32_t *) (pa | mask);
-	 
-		i++;
-		pa += 1 << 20;
-		va += 1 << 20;
+	s_id = section_new(p, len, flags);
+	if (s_id < 0) {
+		panic("Failed to create new section!\n");
 	}
+	
+	if (!page_list_add(p->page_list, s_id,
+	                   start, start,
+	                   0, len)) {
+	                   
+		panic("Failed to add 0x%h %i to page list for proc %i!\n",
+		      start, len, p->pid);
+	}
+}
+
+void
+give_proc0_world(proc_t p0)
+{
+	give_proc_section(p0, (reg_t) &_ram_start, (reg_t) &_kernel_start,
+	                  ADDR_read|ADDR_write|ADDR_cache);
+	                  
+	give_proc_section(p0, (reg_t) &_kernel_end, (reg_t) &_ram_end,
+	                  ADDR_read|ADDR_write|ADDR_cache);
+	                  	
+  give_proc_section(p0, 0x47400000, 0x47404000, ADDR_read|ADDR_write); /* USB */
+  give_proc_section(p0, 0x44E31000, 0x44E32000, ADDR_read|ADDR_write); /* DMTimer1 */
+  give_proc_section(p0, 0x48042000, 0x48043000, ADDR_read|ADDR_write); /* DMTIMER3 */
+  give_proc_section(p0, 0x44E09000, 0x44E0A000, ADDR_read|ADDR_write); /* UART0 */
+  give_proc_section(p0, 0x48022000, 0x48023000, ADDR_read|ADDR_write); /* UART1 */
+  give_proc_section(p0, 0x48024000, 0x48025000, ADDR_read|ADDR_write); /* UART2 */
+  give_proc_section(p0, 0x44E07000, 0x44E08000, ADDR_read|ADDR_write); /* GPIO0 */
+  give_proc_section(p0, 0x4804c000, 0x4804d000, ADDR_read|ADDR_write); /* GPIO1 */
+  give_proc_section(p0, 0x481ac000, 0x481ad000, ADDR_read|ADDR_write); /* GPIO2 */
+  give_proc_section(p0, 0x481AE000, 0x481AF000, ADDR_read|ADDR_write); /* GPIO3 */
+  give_proc_section(p0, 0x48060000, 0x48061000, ADDR_read|ADDR_write); /* MMCHS0 */
+  give_proc_section(p0, 0x481D8000, 0x481D9000, ADDR_read|ADDR_write); /* MMC1 */
+  give_proc_section(p0, 0x47810000, 0x47820000, ADDR_read|ADDR_write); /* MMCHS2 */
+  give_proc_section(p0, 0x44E35000, 0x44E36000, ADDR_read|ADDR_write); /* Watchdog */
+  give_proc_section(p0, 0x44E05000, 0x44E06000, ADDR_read|ADDR_write); /* DMTimer0 */
 }

@@ -45,6 +45,16 @@ extern void *_proc1_bss_end;
 #define USER_start 0x1000
 #define USER_stack 0x20000000
 
+static uint8_t proc0_space_page[PAGE_SIZE]__attribute__((__aligned__(PAGE_SIZE)));
+static uint8_t proc0_page_list_page[PAGE_SIZE]__attribute__((__aligned__(PAGE_SIZE)));
+static uint8_t proc0_page_page[PAGE_SIZE]__attribute__((__aligned__(PAGE_SIZE)));
+static uint8_t proc0_stack_page[PAGE_SIZE]__attribute__((__aligned__(PAGE_SIZE)));
+
+static uint8_t proc1_space_page[PAGE_SIZE]__attribute__((__aligned__(PAGE_SIZE)));
+static uint8_t proc1_page_list_page[PAGE_SIZE]__attribute__((__aligned__(PAGE_SIZE)));
+static uint8_t proc1_page_page[PAGE_SIZE]__attribute__((__aligned__(PAGE_SIZE)));
+static uint8_t proc1_stack_page[PAGE_SIZE]__attribute__((__aligned__(PAGE_SIZE)));
+
 static void
 proc_start(void)
 {
@@ -59,15 +69,22 @@ proc_start(void)
 static proc_t
 init_proc(void *text, size_t tlen,
           void *data, size_t dlen,
-          void *bss, size_t blen)
+          uint8_t *space_page,
+          uint8_t *page_list_page,
+          uint8_t *page_page,
+          uint8_t *stack_page)
 {
-	reg_t space_page, page, stack, va, pa, o;
+	page_list_t page_list;
+	reg_t va, pa, o;
 	space_t space;
 	proc_t p;
 	
-	space_page = (reg_t) get_ram_page();
+	space = space_new((reg_t) space_page);
 	
-	space = space_new(space_page);
+	page_list = (page_list_t) page_list_page;
+	page_list->next = nil;
+	page_list->len = (PAGE_SIZE - sizeof(struct page_list)) / sizeof(struct page);
+	memset(page_list->pages, 0, page_list->len * sizeof(struct page));
 	
 	va = USER_start;
 	
@@ -75,7 +92,8 @@ init_proc(void *text, size_t tlen,
 	for (o = 0;  o < tlen;  o += PAGE_SIZE, va += PAGE_SIZE) {
 		if (!mapping_add(space, pa + o, va, 
 		                 ADDR_read|ADDR_exec|ADDR_cache)) {
-			return nil;
+			panic("failed to map 0x%h to 0x%h for initial proc!\n",
+			      pa + o, va);
 		}
 	}
 	
@@ -83,32 +101,24 @@ init_proc(void *text, size_t tlen,
 	for (o = 0; o < dlen; o += PAGE_SIZE, va += PAGE_SIZE) {
 		if (!mapping_add(space, pa + o, va, 
 		                 ADDR_read|ADDR_write|ADDR_cache)) {
-			return nil;
+			panic("failed to map 0x%h to 0x%h for initial proc!\n",
+			      pa + o, va);
 		}
 	}
-	
-	for (o = 0; o < blen; o += PAGE_SIZE, va += PAGE_SIZE) {
-		pa = (reg_t) get_ram_page();
-		memset((void *) pa, 0, PAGE_SIZE);
-		if (!mapping_add(space, pa, va, 
+		
+	if (!mapping_add(space, (reg_t) stack_page, USER_stack - PAGE_SIZE, 
 		                 ADDR_read|ADDR_write|ADDR_cache)) {
-			return nil;
-		}
+		panic("failed to map 0x%h to 0x%h for initial proc!\n",
+			      stack_page, USER_stack - PAGE_SIZE);
 	}
 	
-	stack = (reg_t) get_ram_page();
-	if (!mapping_add(space, stack, USER_stack - PAGE_SIZE, 
-		                 ADDR_read|ADDR_write|ADDR_cache)) {
-		return nil;
-	}
-	
-	page = (reg_t) get_ram_page();
-	if (!mapping_add(space, page, USER_stack, 
+	if (!mapping_add(space, (reg_t) page_page, USER_stack, 
 		                 ADDR_read|ADDR_write)) {
-		return nil;
+		panic("failed to map 0x%h to 0x%h for initial proc!\n",
+			      page_page, USER_stack);
 	}
 	
-	p = proc_new(space, (void *) page);
+	p = proc_new(space, page_list, (void *) page_page);
 	
 	p->page_user = (void *) USER_stack;
 	
@@ -133,8 +143,10 @@ kmain(void)
 	              (size_t) &_proc0_text_end - (size_t) &_proc0_text_start,
 	              &_proc0_data_start,
 	              (size_t) &_proc0_data_end - (size_t) &_proc0_data_start,
-	              &_proc0_bss_start,
-	              (size_t) &_proc0_bss_end - (size_t) &_proc0_bss_start);
+	              proc0_space_page,
+	              proc0_page_list_page,
+	              proc0_page_page,
+	              proc0_stack_page);
 	
 	give_proc0_world(p0);
 	
@@ -142,8 +154,10 @@ kmain(void)
 	              (size_t) &_proc1_text_end - (size_t) &_proc1_text_start,
 	               &_proc1_data_start,
 	              (size_t) &_proc1_data_end - (size_t) &_proc1_data_start,
-	               &_proc1_bss_start,
-	               (size_t) &_proc1_bss_end - (size_t) &_proc1_bss_start);
+	              proc1_space_page,
+	              proc1_page_list_page,
+	              proc1_page_page,
+	              proc1_stack_page);
 	
 	schedule(p0);
   

@@ -17,14 +17,8 @@ SECTIONS
 		_data_start = .;
 		*(.data)
 		*(.data.*)
-		_data_end = .;
-	}
-	
-	.bss ALIGN(4096) :
-	{
-		_bss_start = .;
 		*(.bss)
 		*(.bss.*)
-		_bss_end = .;
+		_data_end = .;
 	}
 }

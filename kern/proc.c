@@ -30,8 +30,6 @@
 void add_to_list_back(struct proc **, struct proc *);
 bool remove_from_list(struct proc **, struct proc *);
 
-#define MAX_PROCS 512
-
 static uint32_t nextpid = 0;
 
 static struct proc procs[MAX_PROCS] = { 0 };
@@ -169,7 +167,9 @@ proc_start(void)
 }
 
 proc_t
-proc_new(space_t space, void *page)
+proc_new(space_t space,
+         page_list_t page_list,
+         void *sys_page)
 {
   int pid, npid;
   proc_t p;
@@ -186,8 +186,9 @@ proc_new(space_t space, void *page)
   
   p->pid = pid;
   p->space = space;
+  p->page_list = page_list;
 
-	p->page = page;
+	p->page = sys_page;
 	
 	memset(p->page, 0, PAGE_SIZE);
 	p->page->pid = pid;
@@ -213,4 +214,61 @@ find_proc(int pid)
   }
   
   return nil;
+}
+
+static struct proc_list proc_lists[MAX_PROC_LISTS] = { 0 };
+
+bool
+proc_list_add(proc_list_t *l, proc_t p)
+{
+	proc_list_t n;
+	size_t i;
+	
+	n = nil;
+	for (i = 0; 
+	     i < sizeof(proc_lists)/sizeof(*proc_lists);
+	     i++) {
+	
+		if (cas(&proc_lists[i].proc, nil, p)) {
+			n = &proc_lists[i];
+			break;
+		}
+	}
+
+	if (n == nil) {
+		return false;
+	}
+	
+	n->next = nil;
+	
+	do {
+		while (*l != nil) 
+			l = &(*l)->next;
+		
+	} while (!cas(l, nil, n));
+	
+	return true;
+}
+
+proc_t
+proc_list_remove(proc_list_t *list, int pid)
+{
+	proc_list_t *l, n;
+	proc_t p;
+	
+	do {
+		for (l = list;
+		     *l != nil && (*l)->proc->pid != pid;
+		     l = &(*l)->next)
+			n = *l;
+		
+		if (n == nil) {
+			return nil;
+		}
+	} while (!cas(l, n, n->next));
+	
+	p = n->proc;
+	n->proc = nil;
+	
+	return p;
 }

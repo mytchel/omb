@@ -34,35 +34,17 @@
 
 typedef enum {
 	MESSAGE_addr,
-	MESSAGE_proc,
 	MESSAGE_proc_init,
 } message_t;
+
+
 
 typedef struct addr_req *addr_req_t;
 typedef struct addr_resp *addr_resp_t;
 
 struct addr_req {
 	message_t type; /* = MESSAGE_addr */
-
-#define ADDR_REQ_from_ram    0
-#define ADDR_REQ_from_io     1
-#define ADDR_REQ_from_local  2
-	
-	int from_type;
-	void *from_addr;
-		
-#define ADDR_REQ_to_local    0
-#define ADDR_REQ_to_other    1
-
-	int to_type;
-	int to;
-	void *to_addr;
-	
-#define ADDR_REQ_flag_read    (1<<0)
-#define ADDR_REQ_flag_write   (1<<1)
-#define ADDR_REQ_flag_exec    (1<<2)
-#define ADDR_REQ_flag_cache   (1<<3)
-	int flags;
+	reg_t addr;
 	size_t len;
 };
 
@@ -70,29 +52,11 @@ ASSERT_MESSAGE_SIZE(addr_req);
 
 struct addr_resp {
 	message_t type; /* = MESSAGE_addr */
-	
-	void *va; /* Where it is. nil for failure. */
 };
+
+
 
 ASSERT_MESSAGE_SIZE(addr_resp);
-
-
-typedef struct proc_req *proc_req_t;
-typedef struct proc_resp *proc_resp_t;
-
-struct proc_req {
-	message_t type; /* = MESSAGE_proc */
-	void *page_addr;
-};
-
-ASSERT_MESSAGE_SIZE(proc_req);
-              
-              
-struct proc_resp {
-	message_t type; /* = MESSAGE_proc */
-	
-	int pid;
-};
 
 struct proc_init_req {
 	message_t type; /* = MESSAGE_proc_init */
@@ -100,10 +64,12 @@ struct proc_init_req {
 	reg_t sp;
 };
 
+ASSERT_MESSAGE_SIZE(proc_init_req);
+
 struct proc_init_resp {
 	message_t type; /* = MESSAGE_proc_init */
 };
 
-ASSERT_MESSAGE_SIZE(proc_resp);
+ASSERT_MESSAGE_SIZE(proc_init_resp);
 
 #endif
