@@ -148,7 +148,9 @@ remove_from_list(proc_t *l, proc_t p)
 static void
 proc_start(void)
 {
-	label_t *u = (label_t *) up->page->message_in;
+	struct proc_init_req *req = 
+	    (struct proc_init_req *) up->page->m_in;
+	label_t u;
 	proc_t p;
 	
 	p = krecv();
@@ -156,11 +158,14 @@ proc_start(void)
 		/* Do something. */
 	}
 	
+	u.pc = req->pc;
+	u.sp = req->sp;
+	
 	if (kreply(p, OK) != OK) {
 		/* Do something. */
 	}
 		
-	drop_to_user(u, up->kstack, KSTACK_LEN);
+	drop_to_user(&u, up->kstack, KSTACK_LEN);
 }
 
 proc_t
@@ -187,9 +192,6 @@ proc_new(space_t space, void *page)
 	memset(p->page, 0, PAGE_SIZE);
 	p->page->pid = pid;
 	
-  p->next = nil;
-  p->wnext = nil;
-
 	func_label(&p->label, p->kstack, KSTACK_LEN, &proc_start);
 	
 	p->state = PROC_ready;

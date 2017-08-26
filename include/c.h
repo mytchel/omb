@@ -32,17 +32,15 @@
 #include <types.h>
 
 /* All messages must be MESSAGE_LEN bytes long. */
-
-#define MESSAGE_LEN 128
+#define MESSAGE_LEN 64
 
 typedef struct proc_page *proc_page_t;
 
 struct proc_page {
 	int pid;
 	
-	uint8_t message_out[MESSAGE_LEN];
-	uint8_t message_in[MESSAGE_LEN];
-	int ret;
+	uint8_t m_in[MESSAGE_LEN], m_out[MESSAGE_LEN];
+	int m_ret;
 };
 
 proc_page_t
@@ -65,17 +63,19 @@ reply_recv(int pid,
 
 
 int
-map_offer(int pid, 
-          void *start,
-          size_t len,
-          int flags);
+sys_section_create(void *start,
+                   size_t len,
+                   int flags);
 
 int
-map_recv(size_t *len, int *flags);
+sys_section_grant(int pid, int id, bool unmap);
 
 int
-map_reply(int pid, void *start, int flags);
+sys_section_map(int id, void *start, size_t off,
+                size_t len, int flags);
 
+int
+sys_section_revoke(int id);
 
 bool
 cas(void *addr, void *old, void *new);

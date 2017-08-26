@@ -35,6 +35,7 @@
 typedef enum {
 	MESSAGE_addr,
 	MESSAGE_proc,
+	MESSAGE_proc_init,
 } message_t;
 
 typedef struct addr_req *addr_req_t;
@@ -91,6 +92,16 @@ struct proc_resp {
 	message_t type; /* = MESSAGE_proc */
 	
 	int pid;
+};
+
+struct proc_init_req {
+	message_t type; /* = MESSAGE_proc_init */
+	reg_t pc;
+	reg_t sp;
+};
+
+struct proc_init_resp {
+	message_t type; /* = MESSAGE_proc_init */
 };
 
 ASSERT_MESSAGE_SIZE(proc_resp);

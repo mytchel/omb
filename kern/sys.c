@@ -56,8 +56,8 @@ ksend(proc_t p)
 		schedule(nil);
 	}
 	
-	debug("%i got reply %i\n", up->pid, up->page->ret);
-	return up->page->ret;
+	debug("%i got reply %i\n", up->pid, up->page->m_ret);
+	return up->page->m_ret;
 }
 
 proc_t
@@ -75,8 +75,8 @@ krecv(void)
 				continue;
 			}
 
-			memcpy(up->page->message_in, 
-			       w->page->message_out,
+			memcpy(up->page->m_in, 
+			       w->page->m_out,
 			       MESSAGE_LEN);
 			
 			w->state = PROC_reply;
@@ -100,11 +100,11 @@ kreply(proc_t p,
 		return ERR;
 	}
 	
-	memcpy(p->page->message_in,
-	       up->page->message_out,
+	memcpy(p->page->m_in,
+	       up->page->m_out,
 	       MESSAGE_LEN);
 	
-	p->page->ret = ret;
+	p->page->m_ret = ret;
 	
 	schedule(p);
 	
@@ -122,11 +122,11 @@ kreply_recv(proc_t p,
 		return nil;
 	}
 	
-	memcpy(p->page->message_in,
-	       up->page->message_out,
+	memcpy(p->page->m_in,
+	       up->page->m_out,
 	       MESSAGE_LEN);
 	
-	p->page->ret = ret;
+	p->page->m_ret = ret;
 	
 	up->state = PROC_recv;
 	schedule(p);
@@ -209,11 +209,52 @@ sys_reply_recv(int pid,
 	}
 }
 
+reg_t
+sys_section_create(void *start,
+                   size_t len,
+                   int flags)
+{
+	int s_id;
+	
+	s_id = section_new(up->pid, flags);
+	if (s_id < 0) {
+		return ERR;
+	}
+	
+	
+	
+	return ERR;
+}
+
+reg_t
+sys_section_grant(int pid, int id, bool unmap)
+{
+	return ERR;
+}
+
+reg_t
+sys_section_map(int id, void *start, size_t off,
+                size_t len, int flags)
+{
+	return ERR;
+}
+
+reg_t
+sys_section_revoke(int id)
+{
+	return ERR;
+}
+
 void *systab[NSYSCALLS] = {
 	[SYSCALL_GET_PROC_PAGE]  = (void *) &sys_get_proc_page,
 	[SYSCALL_SEND]           = (void *) &sys_send,
 	[SYSCALL_RECV]           = (void *) &sys_recv,
 	[SYSCALL_REPLY]          = (void *) &sys_reply,
 	[SYSCALL_REPLY_RECV]     = (void *) &sys_reply_recv,
+	
+	[SYSCALL_SECTION_CREATE] = (void *) &sys_section_create,
+	[SYSCALL_SECTION_GRANT]  = (void *) &sys_section_grant,
+	[SYSCALL_SECTION_MAP]    = (void *) &sys_section_map,
+	[SYSCALL_SECTION_REVOKE] = (void *) &sys_section_revoke,
 };
 	

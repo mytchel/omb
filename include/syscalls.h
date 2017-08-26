@@ -34,6 +34,11 @@
 #define SYSCALL_REPLY_RECV      3
 #define SYSCALL_GET_PROC_PAGE   4
 
-#define NSYSCALLS               5
+#define SYSCALL_SECTION_CREATE  5
+#define SYSCALL_SECTION_GRANT   6
+#define SYSCALL_SECTION_MAP     7
+#define SYSCALL_SECTION_REVOKE  8
+
+#define NSYSCALLS               9
 
 #endif

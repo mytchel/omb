@@ -137,7 +137,7 @@ main(void)
 		
 	page = get_proc_page();	
 	
-	type = (message_t *) page->message_in;
+	type = (message_t *) page->m_in;
 	
 	ram = (struct addr_holder *) PROC0_RAM_START;
 	io = (struct addr_holder *) get_ram_page();
@@ -172,8 +172,8 @@ main(void)
 		
 		case MESSAGE_addr:
 			ret = handle_addr_request(pid, 
-			                          (addr_req_t) page->message_in, 
-			                          (addr_resp_t) page->message_out);
+			                          (addr_req_t) page->m_in, 
+			                          (addr_resp_t) page->m_out);
 			break;
 		}
 		

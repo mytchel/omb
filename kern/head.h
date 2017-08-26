@@ -26,10 +26,38 @@
  */
 
 #include <c.h>
+#include <sys.h>
 #include <syscalls.h>
 #include <string.h>
 
 typedef struct proc *proc_t;
+typedef struct proc_list *proc_list_t;
+typedef struct page *page_t;
+typedef struct page_list *page_list_t;
+typedef struct section *section_t;
+
+struct proc_list {
+	proc_t p;
+	proc_list_t next;
+};
+
+struct page {
+	int section_id;
+	reg_t pa, va;
+};
+
+struct page_list {
+	page_list_t next;
+	size_t len;
+	page_t pages[];
+};
+
+struct section {
+	int id;
+	int flags;
+	int creator_pid;
+	proc_list_t granted;
+};
 
 typedef enum {
 	PROC_dead,
@@ -49,22 +77,24 @@ struct proc {
 	
 	procstate_t state;
 	int pid;
+	proc_t next;
 	
 	proc_page_t page;
-	void *page_user; /* Virtual address of page. */
+	void *page_user;
 	
 	space_t space;
 	
 	proc_t waiting_on;
-	proc_t waiting;
-	proc_t next;
-	proc_t wnext;
+	proc_list_t waiting;
 	
 	uint8_t kstack[KSTACK_LEN];
+	
+	page_list_t page_list;
 };
 
 proc_t
-proc_new(space_t space, void *page);
+proc_new(space_t space, 
+         void *sys_page);
 
 proc_t
 find_proc(int pid);
@@ -85,6 +115,15 @@ kreply(proc_t p,
 proc_t
 kreply_recv(proc_t p,
             int ret);
+            
+section_t
+section_find(int id);
+
+int
+section_new(int creator, int flags);
+
+void
+section_free(int id);
 
 /* Machine dependant. */
 
@@ -133,4 +172,8 @@ mmu_switch(space_t s);
 
 /* Variables. */
 
-proc_t up;
+extern proc_t up;
+
+extern uint32_t *_kernel_start;
+extern uint32_t *_kernel_end;
+

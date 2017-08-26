@@ -64,8 +64,6 @@ ttb[4096]__attribute__((__aligned__(16*1024))) = { L1_FAULT };
 
 extern uint32_t *_ram_start;
 extern uint32_t *_ram_end;
-extern uint32_t *_kernel_start;
-extern uint32_t *_kernel_end;
 
 static struct addr_holder *ram = nil;
 

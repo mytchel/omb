@@ -50,8 +50,6 @@ proc_start(void)
 {
 	label_t u;
 	
-	debug("in proc %i proc_start\n", up->pid);
-	
 	u.sp = USER_stack;
 	u.pc = USER_start;
 	
@@ -67,11 +65,6 @@ init_proc(void *text, size_t tlen,
 	space_t space;
 	proc_t p;
 	
-	debug("should create new proc from \n");
-	debug("text %i bytes at 0x%h\n", tlen, text);
-	debug("data %i bytes at 0x%h\n", dlen, data);
-	debug("bss %i bytes at 0x%h\n", blen, bss);
-	
 	space_page = (reg_t) get_ram_page();
 	
 	space = space_new(space_page);
@@ -80,7 +73,6 @@ init_proc(void *text, size_t tlen,
 	
 	pa = (reg_t) text;
 	for (o = 0;  o < tlen;  o += PAGE_SIZE, va += PAGE_SIZE) {
-		debug("map text 0x%h to 0x%h\n", pa + o, va);
 		if (!mapping_add(space, pa + o, va, false, true)) {
 			return nil;
 		}
@@ -88,8 +80,6 @@ init_proc(void *text, size_t tlen,
 	
 	pa = (reg_t) data;
 	for (o = 0; o < dlen; o += PAGE_SIZE, va += PAGE_SIZE) {
-	
-		debug("map data 0x%h to 0x%h\n", pa + o, va);
 		if (!mapping_add(space, pa + o, va, true, true)) {
 			return nil;
 		}
@@ -98,7 +88,6 @@ init_proc(void *text, size_t tlen,
 	for (o = 0; o < blen; o += PAGE_SIZE, va += PAGE_SIZE) {
 		pa = (reg_t) get_ram_page();
 		memset((void *) pa, 0, PAGE_SIZE);
-		debug("map bss 0x%h to 0x%h\n", pa, va);
 		if (!mapping_add(space, pa, va, true, true)) {
 			return nil;
 		}
@@ -115,8 +104,6 @@ init_proc(void *text, size_t tlen,
 	}
 	
 	p = proc_new(space, (void *) page);
-	
-	debug("new proc has pid %i\n", p->pid);
 	
 	p->page_user = (void *) USER_stack;
 	

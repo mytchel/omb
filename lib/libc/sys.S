@@ -33,6 +33,10 @@
 .global recv
 .global reply
 .global reply_recv
+.global section_create
+.global section_grant
+.global section_map
+.global section_revoke
 
 
 start:
@@ -70,5 +74,30 @@ reply:
 reply_recv:
 	push {r12, lr}
 	mov r12, #SYSCALL_REPLY_RECV
+	svc 0
+	pop {r12, pc}
+
+
+section_create:
+	push {r12, lr}
+	mov r12, #SYSCALL_SECTION_CREATE
+	svc 0
+	pop {r12, pc}
+
+section_grant:
+	push {r12, lr}
+	mov r12, #SYSCALL_SECTION_GRANT
+	svc 0
+	pop {r12, pc}
+
+section_map:
+	push {r12, lr}
+	mov r12, #SYSCALL_SECTION_MAP
+	svc 0
+	pop {r12, pc}
+
+section_revoke:
+	push {r12, lr}
+	mov r12, #SYSCALL_SECTION_REVOKE
 	svc 0
 	pop {r12, pc}
