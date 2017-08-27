@@ -59,6 +59,10 @@ ttb[4096]__attribute__((__aligned__(16*1024))) = { L1_FAULT };
 extern uint32_t *_ram_start;
 extern uint32_t *_ram_end;
 
+static uint8_t kernel_page_page[PAGE_SIZE] = { 0 };
+
+kernel_page_t kernel_page = (kernel_page_t) kernel_page_page;
+
 void
 init_memory(void)
 {
@@ -78,22 +82,70 @@ init_memory(void)
   imap((void *) 0x48040000, (void *) 0x48041000, AP_RW_NO, false); /* DMTIMER2 for systick. */
   imap((void *) 0x48200000, (void *) 0x48201000, AP_RW_NO, false); /* INTCPS */
 
-  imap((void *) 0x47400000, (void *) 0x47404000, AP_RW_RW, false); /* USB */
+	kernel_page->regions[kernel_page->nregions].type = REGION_ram;
+	kernel_page->regions[kernel_page->nregions].start = (reg_t) &_ram_start;
+	kernel_page->regions[kernel_page->nregions].len = (reg_t) &_kernel_start - (reg_t) &_ram_start;
+	kernel_page->nregions++;
+	
+	kernel_page->regions[kernel_page->nregions].type = REGION_ram;
+	kernel_page->regions[kernel_page->nregions].start = (reg_t) &_kernel_end;
+	kernel_page->regions[kernel_page->nregions].len = (reg_t) &_ram_end - (reg_t) &_kernel_end;
+	kernel_page->nregions++;
+	
+	imap((void *) 0x47400000, (void *) 0x47404000, AP_RW_RW, false); /* USB */
+	kernel_page->regions[kernel_page->nregions].type = REGION_io;
+	kernel_page->regions[kernel_page->nregions].start = 0x47400000;
+	kernel_page->regions[kernel_page->nregions].len = 0x47404000 - 0x47400000;
+	kernel_page->nregions++;
+	    
   imap((void *) 0x44E31000, (void *) 0x44E32000, AP_RW_RW, false); /* DMTimer1 */
-  imap((void *) 0x48042000, (void *) 0x48043000, AP_RW_RW, false); /* DMTIMER3 */
+	kernel_page->regions[kernel_page->nregions].type = REGION_io;
+	kernel_page->regions[kernel_page->nregions].start = 0x44E31000;
+	kernel_page->regions[kernel_page->nregions].len = 0x44E32000 - 0x44E31000;
+	kernel_page->nregions++;
+	
   imap((void *) 0x44E09000, (void *) 0x44E0A000, AP_RW_RW, false); /* UART0 */
-  imap((void *) 0x48022000, (void *) 0x48023000, AP_RW_RW, false); /* UART1 */
-  imap((void *) 0x48024000, (void *) 0x48025000, AP_RW_RW, false); /* UART2 */
+	kernel_page->regions[kernel_page->nregions].type = REGION_io;
+	kernel_page->regions[kernel_page->nregions].start = 0x44E09000;
+	kernel_page->regions[kernel_page->nregions].len = 0x44E0A000 - 0x44E09000;
+	kernel_page->nregions++;
+	
   imap((void *) 0x44E07000, (void *) 0x44E08000, AP_RW_RW, false); /* GPIO0 */
+	kernel_page->regions[kernel_page->nregions].type = REGION_io;
+	kernel_page->regions[kernel_page->nregions].start = 0x44E07000;
+	kernel_page->regions[kernel_page->nregions].len = 0x44E08000 - 0x44E07000;
+	kernel_page->nregions++;
+	
   imap((void *) 0x4804c000, (void *) 0x4804d000, AP_RW_RW, false); /* GPIO1 */
+	kernel_page->regions[kernel_page->nregions].type = REGION_io;
+	kernel_page->regions[kernel_page->nregions].start = 0x4804c000;
+	kernel_page->regions[kernel_page->nregions].len = 0x4804d000 - 0x4804c000;
+	kernel_page->nregions++;
+	
   imap((void *) 0x481ac000, (void *) 0x481ad000, AP_RW_RW, false); /* GPIO2 */
+	kernel_page->regions[kernel_page->nregions].type = REGION_io;
+	kernel_page->regions[kernel_page->nregions].start = 0x481ac000;
+	kernel_page->regions[kernel_page->nregions].len = 0x481ad000 - 0x481ac000;
+	kernel_page->nregions++;
+	
   imap((void *) 0x481AE000, (void *) 0x481AF000, AP_RW_RW, false); /* GPIO3 */
+	kernel_page->regions[kernel_page->nregions].type = REGION_io;
+	kernel_page->regions[kernel_page->nregions].start =0x481AE000;
+	kernel_page->regions[kernel_page->nregions].len = 0x481AF000 - 0x481AE000;
+	kernel_page->nregions++;
+	
   imap((void *) 0x48060000, (void *) 0x48061000, AP_RW_RW, false); /* MMCHS0 */
-  imap((void *) 0x481D8000, (void *) 0x481D9000, AP_RW_RW, false); /* MMC1 */
+	kernel_page->regions[kernel_page->nregions].type = REGION_io;
+	kernel_page->regions[kernel_page->nregions].start =0x481AE000;
+	kernel_page->regions[kernel_page->nregions].len = 0x481AF000 - 0x481AE000;
+	kernel_page->nregions++;
+	
   imap((void *) 0x47810000, (void *) 0x47820000, AP_RW_RW, false); /* MMCHS2 */
-  imap((void *) 0x44E35000, (void *) 0x44E36000, AP_RW_RW, false); /* Watchdog */
-  imap((void *) 0x44E05000, (void *) 0x44E06000, AP_RW_RW, false); /* DMTimer0 */
-
+	kernel_page->regions[kernel_page->nregions].type = REGION_io;
+	kernel_page->regions[kernel_page->nregions].start = 0x47810000;
+	kernel_page->regions[kernel_page->nregions].len = 0x47820000 - 0x47810000;
+	kernel_page->nregions++;
+	
   mmu_enable();
 }
 

@@ -41,31 +41,15 @@ handle_addr_request(int pid,
 int
 main(void)
 {
+	kernel_page_t kern_page;
 	proc_page_t page;
 	message_t *type;
 	int pid, ret;
 		
-	page = get_proc_page();	
+	page = get_proc_page();
+	kern_page = get_kernel_page();
 	
 	type = (message_t *) page->m_in;
-	
-#if 0
-  give_proc_section(p, 0x47400000, 0x47404000, ADDR_read|ADDR_write); /* USB */
-  give_proc_section(p, 0x44E31000, 0x44E32000, ADDR_read|ADDR_write); /* DMTimer1 */
-  give_proc_section(p, 0x48042000, 0x48043000, ADDR_read|ADDR_write); /* DMTIMER3 */
-  give_proc_section(p, 0x44E09000, 0x44E0A000, ADDR_read|ADDR_write); /* UART0 */
-  give_proc_section(p, 0x48022000, 0x48023000, ADDR_read|ADDR_write); /* UART1 */
-  give_proc_section(p, 0x48024000, 0x48025000, ADDR_read|ADDR_write); /* UART2 */
-  give_proc_section(p, 0x44E07000, 0x44E08000, ADDR_read|ADDR_write); /* GPIO0 */
-  give_proc_section(p, 0x4804c000, 0x4804d000, ADDR_read|ADDR_write); /* GPIO1 */
-  give_proc_section(p, 0x481ac000, 0x481ad000, ADDR_read|ADDR_write); /* GPIO2 */
-  give_proc_section(p, 0x481AE000, 0x481AF000, ADDR_read|ADDR_write); /* GPIO3 */
-  give_proc_section(p, 0x48060000, 0x48061000, ADDR_read|ADDR_write); /* MMCHS0 */
-  give_proc_section(p, 0x481D8000, 0x481D9000, ADDR_read|ADDR_write); /* MMC1 */
-  give_proc_section(p, 0x47810000, 0x47820000, ADDR_read|ADDR_write); /* MMCHS2 */
-  give_proc_section(p, 0x44E35000, 0x44E36000, ADDR_read|ADDR_write); /* Watchdog */
-  give_proc_section(p, 0x44E05000, 0x44E06000, ADDR_read|ADDR_write); /* DMTimer0 */
-#endif
 
 	pid = recv(PID_ALL);
 	

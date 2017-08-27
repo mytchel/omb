@@ -35,6 +35,7 @@
 #define MESSAGE_LEN 64
 
 typedef struct proc_page *proc_page_t;
+typedef struct kernel_page *kernel_page_t;
 
 struct proc_page {
 	int pid;
@@ -43,8 +44,27 @@ struct proc_page {
 	int m_ret;
 };
 
+typedef enum {
+	REGION_ram,
+	REGION_io,
+} region_type_t;
+
+struct region {
+	region_type_t type;
+	reg_t start;
+	size_t len;
+};
+
+struct kernel_page {
+	size_t nregions;
+	struct region regions[];
+};
+
 proc_page_t
 get_proc_page(void);
+
+kernel_page_t
+get_kernel_page(void);
 
 #define PID_ALL        -1
 

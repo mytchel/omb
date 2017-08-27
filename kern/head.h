@@ -33,11 +33,6 @@
 typedef struct proc *proc_t;
 typedef struct proc_list *proc_list_t;
 
-struct proc_list {
-	proc_t proc;
-	proc_list_t next;
-};
-
 typedef enum {
 	PROC_dead,
 	PROC_enter,
@@ -64,6 +59,11 @@ struct proc {
 	proc_list_t waiting;
 	
 	uint8_t kstack[KSTACK_LEN];
+};
+
+struct proc_list {
+	proc_t proc;
+	proc_list_t next;
 };
 
 proc_t
@@ -131,6 +131,7 @@ func_label(label_t *l,
 /* Variables. */
 
 extern proc_t up;
+extern kernel_page_t kernel_page;
 
 extern uint32_t *_kernel_start;
 extern uint32_t *_kernel_end;

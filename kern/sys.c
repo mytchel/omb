@@ -131,6 +131,12 @@ sys_get_proc_page(void)
 }
 
 reg_t
+sys_get_kernel_page(void)
+{
+	return (reg_t) kernel_page;
+}
+
+reg_t
 sys_send(int pid)
 {
 	proc_t p;
@@ -201,10 +207,11 @@ sys_reply_recv(int pid,
 }
 
 void *systab[NSYSCALLS] = {
-	[SYSCALL_GET_PROC_PAGE]  = (void *) &sys_get_proc_page,
-	[SYSCALL_SEND]           = (void *) &sys_send,
-	[SYSCALL_RECV]           = (void *) &sys_recv,
-	[SYSCALL_REPLY]          = (void *) &sys_reply,
-	[SYSCALL_REPLY_RECV]     = (void *) &sys_reply_recv,
+	[SYSCALL_GET_PROC_PAGE]    = (void *) &sys_get_proc_page,
+	[SYSCALL_GET_KERNEL_PAGE]  = (void *) &sys_get_kernel_page,
+	[SYSCALL_SEND]             = (void *) &sys_send,
+	[SYSCALL_RECV]             = (void *) &sys_recv,
+	[SYSCALL_REPLY]            = (void *) &sys_reply,
+	[SYSCALL_REPLY_RECV]       = (void *) &sys_reply_recv,
 };
 	
