@@ -87,7 +87,6 @@ schedule(proc_t n)
 
 	if (up != nil) {
 		up->state = PROC_oncpu;
-		mmu_switch(up->space);
 		goto_label(&up->label);
 		
 	} else {
@@ -167,9 +166,7 @@ proc_start(void)
 }
 
 proc_t
-proc_new(space_t space,
-         page_list_t page_list,
-         void *sys_page)
+proc_new(void *sys_page)
 {
   int pid, npid;
   proc_t p;
@@ -185,9 +182,6 @@ proc_new(space_t space,
 	memset(p, 0, sizeof(struct proc));
   
   p->pid = pid;
-  p->space = space;
-  p->page_list = page_list;
-
 	p->page = sys_page;
 	
 	memset(p->page, 0, PAGE_SIZE);

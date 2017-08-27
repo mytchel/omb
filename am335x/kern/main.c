@@ -28,6 +28,40 @@
 #include "head.h"
 #include "fns.h"
 
+extern void *_proc0_text_start;
+extern void *_proc0_text_end;
+extern void *_proc0_data_start;
+extern void *_proc0_data_end;
+
+static uint8_t proc0_page_page[PAGE_SIZE]__attribute__((__aligned__(PAGE_SIZE)));
+static uint8_t proc0_stack_page[PAGE_SIZE]__attribute__((__aligned__(PAGE_SIZE)));
+
+static void
+proc0_start(void)
+{
+	label_t u = {0};
+	
+	u.sp = (reg_t) proc0_stack_page + PAGE_SIZE;
+	u.pc = (reg_t) &_proc0_text_start;
+	
+	drop_to_user(&u, up->kstack, KSTACK_LEN);
+}
+
+static proc_t
+init_proc0(void)
+{
+	proc_t p;
+	
+	p = proc_new((void *) proc0_page_page);
+	if (p == nil) {
+		panic("Failed to create proc0!\n");
+	}
+	
+	func_label(&p->label, p->kstack, KSTACK_LEN, &proc0_start);
+	
+	return p;
+}
+
 int
 kmain(void)
 {

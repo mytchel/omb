@@ -109,7 +109,6 @@ KSRC_C := \
         kern/uart.c               \
         ../kern/proc.c            \
         ../kern/sys.c             \
-        ../kern/page.c            \
         ../lib/libstring/conv.c   \
         ../lib/libstring/scanf.c  \
         ../lib/libstring/string.c \
@@ -162,13 +161,13 @@ proc1.elf: proc1/linker.ld $(P1OBJECTS)
 		-lgcc
 		
 
-CLEAN += $(TARGET).elf $(TARGET).list proc0.bo proc1.bo
-CLEAN += proc0.elf proc1.elf
+CLEAN += $(TARGET).elf $(TARGET).list proc0.bo
+CLEAN += proc0.elf
 
-am335x.elf: kern/linker.ld proc0.bo proc1.bo $(KOBJECTS)
+am335x.elf: kern/linker.ld proc0.bo $(KOBJECTS)
 	$(LD) $(LDFLAGS) \
 		-T kern/linker.ld -Ttext $(loadaddr) \
-		-o $@ $(KOBJECTS) proc0.bo proc1.bo \
+		-o $@ $(KOBJECTS) proc0.bo \
 		-lgcc
 
 
