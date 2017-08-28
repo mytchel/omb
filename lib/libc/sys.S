@@ -34,6 +34,7 @@
 .global recv
 .global reply
 .global reply_recv
+.global proc_create
 
 
 start:
@@ -77,6 +78,12 @@ reply:
 reply_recv:
 	push {r12, lr}
 	mov r12, #SYSCALL_REPLY_RECV
+	svc 0
+	pop {r12, pc}
+	
+proc_create:
+	push {r12, lr}
+	mov r12, #SYSCALL_PROC_CREATE
 	svc 0
 	pop {r12, pc}
 	

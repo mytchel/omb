@@ -35,7 +35,6 @@
 #define MESSAGE_LEN 64
 
 typedef struct proc_page *proc_page_t;
-typedef struct kernel_page *kernel_page_t;
 
 struct proc_page {
 	int pid;
@@ -43,6 +42,9 @@ struct proc_page {
 	uint8_t m_in[MESSAGE_LEN], m_out[MESSAGE_LEN];
 	int m_ret;
 };
+
+typedef struct region *region_t;
+typedef struct kernel_page *kernel_page_t;
 
 typedef enum {
 	REGION_ram,
@@ -82,6 +84,9 @@ int
 reply_recv(int pid,
            int ret,
            int rpid);
+
+int
+proc_create(proc_page_t proc_page);
 
 bool
 cas(void *addr, void *old, void *new);

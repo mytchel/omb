@@ -25,52 +25,17 @@
  *
  */
 
-#ifndef _SYS_H_
-#define _SYS_H_
+#include <c.h>
 
-#define ASSERT_MESSAGE_SIZE(m) \
-    STATIC_ASSERT(sizeof(struct m) <= MESSAGE_LEN, \
-                  too_big##m)
-
-typedef enum {
-	MESSAGE_addr,
-	MESSAGE_proc_init,
-} message_t;
-
-
-
-typedef struct addr_req *addr_req_t;
-typedef struct addr_resp *addr_resp_t;
-
-struct addr_req {
-	message_t type; /* = MESSAGE_addr */
-	reg_t addr;
-	size_t len;
-};
-
-ASSERT_MESSAGE_SIZE(addr_req);
-
-struct addr_resp {
-	message_t type; /* = MESSAGE_addr */
-	reg_t addr;
-};
-
-ASSERT_MESSAGE_SIZE(addr_resp);
-
-typedef struct proc_init_req *proc_init_req_t;
-
-struct proc_init_req {
-	message_t type; /* = MESSAGE_proc_init */
-	reg_t pc;
-	reg_t sp;
-};
-
-ASSERT_MESSAGE_SIZE(proc_init_req);
-
-struct proc_init_resp {
-	message_t type; /* = MESSAGE_proc_init */
-};
-
-ASSERT_MESSAGE_SIZE(proc_init_resp);
-
-#endif
+void
+main(void)
+{
+	int j;
+	
+	while (true) {
+		send(0);
+		
+		for (j = 0; j < 0xfffff; j++)
+			;
+	}
+}

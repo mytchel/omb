@@ -206,6 +206,19 @@ sys_reply_recv(int pid,
 	}
 }
 
+reg_t
+sys_proc_create(proc_page_t page)
+{
+	proc_t p;
+	
+	p = proc_new((void *) page);
+	if (p == nil) {
+		return ERR;
+	}
+	
+	return p->pid;
+}
+
 void *systab[NSYSCALLS] = {
 	[SYSCALL_GET_PROC_PAGE]    = (void *) &sys_get_proc_page,
 	[SYSCALL_GET_KERNEL_PAGE]  = (void *) &sys_get_kernel_page,
@@ -213,5 +226,6 @@ void *systab[NSYSCALLS] = {
 	[SYSCALL_RECV]             = (void *) &sys_recv,
 	[SYSCALL_REPLY]            = (void *) &sys_reply,
 	[SYSCALL_REPLY_RECV]       = (void *) &sys_reply_recv,
+	[SYSCALL_PROC_CREATE]      = (void *) &sys_proc_create,
 };
 	

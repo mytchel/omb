@@ -25,23 +25,9 @@
  *
  */
 
-#include <c.h>
-#include <mach.h>
-#include <sys.h>
-#include <string.h>
-#include <uart.h>
+extern reg_t *_proc_uart_start;
 
-extern uint32_t *_text_start;
-extern uint32_t *_text_end;
-extern uint32_t *_data_start;
-extern uint32_t *_data_end;
-extern uint32_t *_bss_start;
-extern uint32_t *_bss_end;
-
-int
-main(void)
-{
-	while (true)
-		;
-}
-
+reg_t procs[] = {
+	(reg_t) &_proc_uart_start,
+	nil
+};

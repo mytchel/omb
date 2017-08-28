@@ -1,7 +1,6 @@
 
 SECTIONS
 {
-	. = 0x3000;
 	.text ALIGN(4096) :
 	{
 		_text_start = .;
@@ -19,6 +18,12 @@ SECTIONS
 		*(.data.*)
 		*(.bss)
 		*(.bss.*)
+	
+		. = ALIGN(4096);
+		
+		_proc_uart_start = .;
+		base/uart.bo(*)
+		
 		_data_end = .;
 	}
 }

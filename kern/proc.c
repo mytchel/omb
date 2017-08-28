@@ -155,13 +155,18 @@ proc_start(void)
 		/* Do something. */
 	}
 	
+	debug("proc %i go start message\n", up->pid);
+	
 	u.pc = req->pc;
 	u.sp = req->sp;
+	
+	debug("proc %i replying with ok\n", up->pid);
 	
 	if (kreply(p, OK) != OK) {
 		/* Do something. */
 	}
-		
+	
+	debug("proc %i droping to 0x%h with sp 0x%h\n", up->pid, u.pc, u.sp);	
 	drop_to_user(&u, up->kstack, KSTACK_LEN);
 }
 
@@ -199,15 +204,7 @@ proc_new(void *sys_page)
 proc_t
 find_proc(int pid)
 {
-  proc_t p;
-  
-  for (p = alive; p != nil; p = p->next) {
-  	if (p->pid == pid) {
-  		return p;
-  	}
-  }
-  
-  return nil;
+  return &procs[pid];
 }
 
 static struct proc_list proc_lists[MAX_PROC_LISTS] = { 0 };
@@ -251,14 +248,23 @@ proc_list_remove(proc_list_t *list, int pid)
 	proc_t p;
 	
 	do {
-		for (l = list;
-		     *l != nil && (*l)->proc->pid != pid;
-		     l = &(*l)->next)
-			n = *l;
+		n = nil;
+		l = list;
+		
+		while ((n = *l) != nil) {
+			if (n->proc->pid == pid) {
+				break;
+			} else if (n->next != nil) {
+				l = &(*l)->next;
+			} else {
+				break;
+			}
+		}
 		
 		if (n == nil) {
 			return nil;
 		}
+		
 	} while (!cas(l, n, n->next));
 	
 	p = n->proc;

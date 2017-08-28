@@ -41,6 +41,7 @@ CFLAGS = -std=c89 \
 	-Wall -Werror \
 	-mcpu=cortex-a8 \
 	-nostdinc -ffreestanding \
+	-mpic-data-is-text-relative -fpic -fpie \
 	-Iinclude -I../include -Ikern/
 
 LDFLAGS = -nostdlib -nodefaultlibs -static \
@@ -59,9 +60,55 @@ HOSTLDFLAGS =
 
 
 .PHONY: all
-all: proc0.list proc1.list am335x.list am335x.umg 
+all: proc0.list am335x.list am335x.umg 
 
-CLEAN += proc0.list proc1.list am335x.list am335x.umg 
+CLEAN += proc0.list am335x.list am335x.umg 
+
+.c.o .S.o:
+	$(CC) $(CFLAGS) -c $< -o $@
+
+
+.o.a:
+	$(AR) rcs $@ $<
+
+
+.elf.bin:
+	$(OBJCOPY) -Obinary $< $@
+
+
+.elf.list:
+	$(OBJDUMP) -S $< > $@
+
+
+.elf.bo:
+	$(OBJCOPY) --rename-section .text=.$*.text \
+	           --rename-section .data=.$*.data \
+	           --rename-section .bss=.$*.bss \
+	           -x -X -S \
+	            $< $@
+
+BASE_UART_SRC_A := \
+        ../lib/libc/sys.S
+
+BASE_UART_SRC_C := \
+				base/uart/main.c          \
+        ../lib/libstring/conv.c   \
+        ../lib/libstring/scanf.c  \
+        ../lib/libstring/string.c \
+        ../lib/libc/util.c
+				
+
+BASE_UART_OBJECTS = \
+	$(BASE_UART_SRC_A:%.S=%.o) \
+	$(BASE_UART_SRC_C:%.c=%.o)
+
+base/uart.elf: base/linker.ld $(BASE_UART_OBJECTS)
+	$(LD) $(LDFLAGS) \
+		-T base/linker.ld \
+		-o $@ $(BASE_UART_OBJECTS) \
+		-lgcc
+
+
 
 P0SRC_A := \
         ../lib/libc/sys.S
@@ -75,24 +122,19 @@ P0OBJECTS := \
 	$(P0SRC_A:%.S=%.o) \
 	$(P0SRC_C:%.c=%.o)
 
+BASE_PROCS = \
+        base/uart.elf
+        
 CLEAN += $(P0OBJECTS)
+CLEAN += proc0.elf proc0.bo 
+CLEAN += $(BASE_PROCS) $(BASE_PROCS:%.elf=%.bo)
 
-
-P1SRC_A := \
-        ../lib/libc/sys.S
-
-P1SRC_C := \
-				proc1/main.c              \
-        ../lib/libc/util.c        \
-        ../lib/libstring/conv.c   \
-        ../lib/libstring/scanf.c  \
-        ../lib/libstring/string.c
-				
-P1OBJECTS := \
-	$(P1SRC_A:%.S=%.o) \
-	$(P1SRC_C:%.c=%.o)
-
-CLEAN += $(P1OBJECTS)
+proc0.elf: proc0/linker.ld $(P0OBJECTS) $(BASE_PROCS:%.elf=%.bo)
+	$(LD) $(LDFLAGS) \
+		-T proc0/linker.ld \
+		-o $@ $(P0OBJECTS) \
+		-lgcc
+		
 
 
 KSRC_A := \
@@ -119,50 +161,8 @@ KOBJECTS := \
 	$(KSRC_A:%.S=%.o) \
 	$(KSRC_C:%.c=%.o)
 
-
 CLEAN += $(KOBJECTS)
-
-
-.c.o .S.o:
-	$(CC) $(CFLAGS) -c $< -o $@
-
-
-.o.a:
-	$(AR) rcs $@ $<
-
-
-.elf.bin:
-	$(OBJCOPY) -Obinary $< $@
-
-
-.elf.list:
-	$(OBJDUMP) -S $< > $@
-
-
-.elf.bo:
-	$(OBJCOPY) --rename-section .text=.$*.text \
-	           --rename-section .data=.$*.data \
-	           --rename-section .bss=.$*.bss \
-	           -x -X -S \
-	            $< $@
-	            
-	            
-proc0.elf: proc0/linker.ld $(P0OBJECTS)
-	$(LD) $(LDFLAGS) \
-		-T proc0/linker.ld \
-		-o $@ $(P0OBJECTS) \
-		-lgcc
-		
-
-proc1.elf: proc1/linker.ld $(P1OBJECTS)
-	$(LD) $(LDFLAGS) \
-		-T proc1/linker.ld \
-		-o $@ $(P1OBJECTS) \
-		-lgcc
-		
-
 CLEAN += $(TARGET).elf $(TARGET).list proc0.bo
-CLEAN += proc0.elf
 
 am335x.elf: kern/linker.ld proc0.bo $(KOBJECTS)
 	$(LD) $(LDFLAGS) \

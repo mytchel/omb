@@ -34,7 +34,8 @@
 #define SYSCALL_REPLY_RECV      3
 #define SYSCALL_GET_PROC_PAGE   4
 #define SYSCALL_GET_KERNEL_PAGE 5
+#define SYSCALL_PROC_CREATE     6
 
-#define NSYSCALLS               6
+#define NSYSCALLS               7
 
 #endif

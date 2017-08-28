@@ -33,11 +33,6 @@ SECTIONS
 		_proc0_data_start = .;
 		*(.proc0.data)
 		_proc0_data_end = .;
-		. = ALIGN(4096);
-	
-		_proc0_bss_start = .;
-		*(.proc0.bss)
-		_proc0_bss_end = .;
 	}
 			
 	.bss ALIGN(4096) : 

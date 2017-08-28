@@ -1,7 +1,6 @@
 
 SECTIONS
 {
-	. = 0x1000;
 	.text ALIGN(4096) :
 	{
 		_text_start = .;
