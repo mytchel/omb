@@ -26,16 +26,61 @@
  */
 
 #include <c.h>
+#include <sys.h>
+#include <uart.h>
+
+static uart_regs_t uart;
+
+static void
+putc(char c)
+{
+  if (c == '\n')
+    putc('\r');
+	
+	while ((uart->lsr & (1 << 5)) == 0)
+		;
+	
+	uart->hr = c;
+}
+
+static void
+puts(const char *c)
+{
+  while (*c)
+    putc(*c++);
+}
 
 void
 main(void)
 {
-	int j;
+	addr_req_t areq;
+	addr_resp_t aresp;
+	proc_page_t page;
+	int pid;
 	
-	while (true) {
-		send(0);
-		
-		for (j = 0; j < 0xfffff; j++)
+	page = get_proc_page();
+	
+	areq = (addr_req_t) page->m_out;
+	aresp = (addr_resp_t) page->m_in;
+	
+	areq->type = MESSAGE_addr;
+	areq->addr = UART0;
+	areq->len = sizeof(struct uart_regs);
+	
+	if (send(0) != OK) {
+		/* Fuck. */
+		while (true)
 			;
+	}
+	
+	uart = (uart_regs_t) aresp->addr;
+	
+	puts("Hello from userspace!\n");
+	
+	pid = recv(PID_ALL);
+	while (true) {
+		puts((char *) page->m_in);
+		
+		pid = reply_recv(pid, OK, PID_ALL);
 	}
 }

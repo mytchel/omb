@@ -214,10 +214,14 @@ handle_addr_request(int pid,
                     addr_req_t req,
                     addr_resp_t resp)
 {
+	size_t len;
+	
+	len = PAGE_ALIGN(req->len);
+
 	if (req->addr != nil) {
-		resp->addr = get_io(req->addr, req->len);
+		resp->addr = get_io(req->addr, len);
 	} else {
-		resp->addr = get_ram(req->len);
+		resp->addr = get_ram(len);
 	}
 	
 	if (resp->addr != nil) {
