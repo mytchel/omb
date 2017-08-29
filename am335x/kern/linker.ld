@@ -48,18 +48,6 @@ SECTIONS
 	. = ALIGN(4096);
 	
 	_ex_stack_top = .;
-		
-	. = ALIGN(1<<20);
-	
-	_uart0_va = .;
-	. = . + 0x1000;
-	_watchdog_va = .;
-	. = . + 0x1000;
-	_systick_va = .;
-	. = . + 0x1000;
-	_intc_va = .;
-	. = . + 0x1000;
-
 	_kernel_end = .;
 
 	. = 0xa0000000;

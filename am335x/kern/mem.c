@@ -35,8 +35,6 @@
 
 #define L1X(va)          ((va) >> 20)
 #define L2X(va)          (((va) >> 12) & ((1 << 8) - 1))
-#define PAL1(entry)      ((entry) & 0xffffffc00)
-#define PAL2(entry)      ((entry) & 0xffffff000)
 
 #define L1_TYPE      0b11
 #define L1_FAULT     0b00
@@ -62,7 +60,8 @@ extern uint32_t *_ram_end;
 extern uint32_t *_kernel_start;
 extern uint32_t *_kernel_end;
 
-static uint8_t kernel_page_page[PAGE_SIZE] = { 0 };
+static uint8_t kernel_page_page[PAGE_SIZE]__attribute__((__aligned__(PAGE_SIZE)))
+    = { 0 };
 
 kernel_page_t kernel_page = (kernel_page_t) kernel_page_page;
 
@@ -169,4 +168,104 @@ imap(void *start, void *end, int ap, bool cachable)
     ttb[L1X(x)] = x | mask;
     x += 1 << 20;
   }
+}
+
+static void
+l2_map(uint32_t *tab, uint32_t pa, uint32_t va,
+       uint32_t ap, uint32_t cachable)
+{
+	uint32_t tex, b;
+	
+	if (cachable) {
+		tex = 7;
+		b = 0;
+	} else {
+		tex = 0;
+		b = 1;
+	}
+	
+	tab[L2X(va)] = pa | L2_SMALL | 
+	    (tex << 6) | (ap << 4) | (cachable << 3) | (b << 2);
+}
+
+bool
+space_map(addr_space_t space, 
+          reg_t pa, reg_t va,
+          int flags,
+          reg_t (*get_page)(void))
+{
+	uint32_t *tab, ap, c;
+	
+	if (space->tab[L1X(va)] == L1_FAULT) {
+		tab = (uint32_t *) get_page();
+		if (tab == nil) {
+			return false;
+		}
+		
+		memset(tab, 0, PAGE_SIZE);
+		
+		space->tab[L1X(va)] = (uint32_t) tab | L1_COARSE;
+	} else {
+		tab = (uint32_t *) (space->tab[L1X(va)] & (~L1_TYPE));
+	}
+	
+	if (flags & ADDR_cache) {
+		c = 1;
+	} else {
+		c = 0;
+	}
+	
+	if (flags & ADDR_write) {
+		ap = AP_RW_RW;
+	} else {
+		ap = AP_RW_RO;
+	}
+	
+	l2_map(tab, pa, va, ap, c);
+	
+	return true;
+}
+
+int
+flags_from_map(reg_t v)
+{
+	int f = ADDR_read;
+	
+	if (((v >> 4) & 0b11) == AP_RW_RW) {
+		f |= ADDR_write;
+	}
+	
+	if (((v >> 2) & 0b1) == 0b1) {
+		f |= ADDR_cache;
+	}
+	
+	return f;
+}
+
+reg_t
+space_find(addr_space_t space,
+           reg_t va, int *flags)
+{
+	uint32_t *tab, pa;
+	
+	tab = (uint32_t *) (space->tab[L1X(va)] & (~L1_TYPE));
+	if (tab == nil) {
+		return nil;
+	}
+	
+	pa = tab[L2X(va)];
+	*flags = flags_from_map(pa);
+	return pa & PAGE_MASK;	
+}
+
+void
+space_unmap(addr_space_t space,
+            reg_t va)
+{
+	uint32_t *tab;
+	
+	tab = (uint32_t *) (space->tab[L1X(va)] & (~L1_TYPE));
+	if (tab != nil) {
+		tab[L2X(va)] = L2_FAULT;
+	}
 }

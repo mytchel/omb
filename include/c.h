@@ -94,7 +94,6 @@ proc_create(proc_page_t proc_page);
 #define ADDR_read     (1<<1)
 #define ADDR_write    (1<<2)
 #define ADDR_cache    (1<<3)
-#define ADDR_exec     (1<<4)
 
 int
 addr_offer(int pid, void *start, size_t len, int flags);

@@ -65,6 +65,8 @@ struct proc {
 		int to;
 	} addr_offer;
 	
+	addr_space_t space;
+	
 	uint8_t kstack[KSTACK_LEN];
 };
 
@@ -135,6 +137,21 @@ func_label(label_t *l,
            size_t stacklen,
            void (*func)(void));
 
+bool
+space_map(addr_space_t space, 
+          reg_t pa, reg_t va,
+          int flags,
+          reg_t (*get_page)(void));
+
+reg_t
+space_find(addr_space_t space,
+           reg_t va,
+           int *flags);
+
+void
+space_unmap(addr_space_t space,
+            reg_t va);
+            
 /* Variables. */
 
 extern proc_t up;

@@ -38,4 +38,10 @@ typedef enum {
   INTR_off = (uint32_t) MODE_DI,
 } intr_t;
 
+typedef struct addr_space *addr_space_t;
+
+struct addr_space {
+	uint32_t tab[PAGE_SIZE / sizeof(uint32_t)];
+};
+
 #include "../../kern/head.h"
