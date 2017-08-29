@@ -28,14 +28,20 @@
 #ifndef _SYSCALLS_H_
 #define _SYSCALLS_H_
 
-#define SYSCALL_SEND            0
-#define SYSCALL_RECV            1
-#define SYSCALL_REPLY           2
-#define SYSCALL_REPLY_RECV      3
-#define SYSCALL_GET_PROC_PAGE   4
-#define SYSCALL_GET_KERNEL_PAGE 5
-#define SYSCALL_PROC_CREATE     6
+#define SYSCALL_SEND              0
+#define SYSCALL_RECV              1
+#define SYSCALL_REPLY             2
+#define SYSCALL_REPLY_RECV        3
 
-#define NSYSCALLS               7
+#define SYSCALL_GET_PROC_PAGE     4
+#define SYSCALL_GET_KERNEL_PAGE   5
+
+#define SYSCALL_PROC_CREATE       6
+
+#define SYSCALL_ADDR_OFFER        7
+#define SYSCALL_ADDR_ACCEPT       8
+#define SYSCALL_ADDR_REJECT       9
+
+#define NSYSCALLS                10
 
 #endif

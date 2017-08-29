@@ -219,13 +219,69 @@ sys_proc_create(proc_page_t page)
 	return p->pid;
 }
 
+reg_t
+sys_addr_offer(int pid, reg_t start, size_t len, int flags)
+{
+	debug("%i making addr offer to %i for %i bytes at 0x%h with flags 0b%b\n",
+	      up->pid, pid, len, start, flags);
+	
+	if (find_proc(pid) == nil) {
+		return ERR;
+	}
+	
+	up->addr_offer.to = pid;
+	up->addr_offer.start = start;
+	up->addr_offer.len = len;
+	up->addr_offer.flags = flags;
+	
+	return OK;
+}
+
+reg_t
+sys_addr_accept(int pid, reg_t start, size_t len, int flags)
+{
+	proc_t p;
+	
+	debug("%i reply to addr offer from %i for %i bytes at 0x%h with flags 0b%b\n",
+	      up->pid, pid, len, start, flags);
+	
+	p = find_proc(pid);
+	if (p == nil) {
+		return ERR;
+	}
+	
+	if ((flags >> 1) != (p->addr_offer.flags >> 1)) {
+		return ERR;
+	}
+	
+	if ((flags & ADDR_give) && (p->addr_offer.flags & ADDR_take)) {
+		debug("take from me and give to offerer.\n");
+		
+	} else if ((flags & ADDR_take) && (p->addr_offer.flags & ADDR_give)) {
+		debug("take from offerer and give to me.\n");
+		
+	} else {
+		return ERR;
+	}
+	
+	debug("flags good.\n");
+	
+	
+	return ERR;
+}
+
 void *systab[NSYSCALLS] = {
 	[SYSCALL_GET_PROC_PAGE]    = (void *) &sys_get_proc_page,
 	[SYSCALL_GET_KERNEL_PAGE]  = (void *) &sys_get_kernel_page,
+	
 	[SYSCALL_SEND]             = (void *) &sys_send,
 	[SYSCALL_RECV]             = (void *) &sys_recv,
 	[SYSCALL_REPLY]            = (void *) &sys_reply,
 	[SYSCALL_REPLY_RECV]       = (void *) &sys_reply_recv,
+	
 	[SYSCALL_PROC_CREATE]      = (void *) &sys_proc_create,
+	
+	[SYSCALL_ADDR_OFFER]       = (void *) &sys_addr_offer,
+	[SYSCALL_ADDR_ACCEPT]      = (void *) &sys_addr_accept,
 };
 	

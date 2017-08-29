@@ -1,0 +1,16 @@
+Makefile
+
+kern/head.h
+kern/mem.c
+
+../kern/head.h
+../kern/sys.c
+
+../include/c.h
+../include/syscalls.h
+
+../lib/libc/sys.S
+
+base/uart/main.c
+
+proc0/main.c

@@ -59,6 +59,9 @@ ttb[4096]__attribute__((__aligned__(16*1024))) = { L1_FAULT };
 extern uint32_t *_ram_start;
 extern uint32_t *_ram_end;
 
+extern uint32_t *_kernel_start;
+extern uint32_t *_kernel_end;
+
 static uint8_t kernel_page_page[PAGE_SIZE] = { 0 };
 
 kernel_page_t kernel_page = (kernel_page_t) kernel_page_page;
@@ -71,9 +74,6 @@ init_memory(void)
   for (i = 0; i < 4096; i++)
     ttb[i] = L1_FAULT;
 
-  mmu_load_ttb(ttb);
-
-  /* Give kernel unmapped access to all of ram. */	
   imap(&_ram_start, &_ram_end, AP_RW_RW, true);
 
 	/* TODO: These should be small pages not sections. */
@@ -130,13 +130,13 @@ init_memory(void)
 	
   imap((void *) 0x481AE000, (void *) 0x481AF000, AP_RW_RW, false); /* GPIO3 */
 	kernel_page->regions[kernel_page->nregions].type = REGION_io;
-	kernel_page->regions[kernel_page->nregions].start =0x481AE000;
+	kernel_page->regions[kernel_page->nregions].start = 0x481AE000;
 	kernel_page->regions[kernel_page->nregions].len = 0x481AF000 - 0x481AE000;
 	kernel_page->nregions++;
 	
   imap((void *) 0x48060000, (void *) 0x48061000, AP_RW_RW, false); /* MMCHS0 */
 	kernel_page->regions[kernel_page->nregions].type = REGION_io;
-	kernel_page->regions[kernel_page->nregions].start =0x481AE000;
+	kernel_page->regions[kernel_page->nregions].start = 0x481AE000;
 	kernel_page->regions[kernel_page->nregions].len = 0x481AF000 - 0x481AE000;
 	kernel_page->nregions++;
 	
@@ -146,6 +146,7 @@ init_memory(void)
 	kernel_page->regions[kernel_page->nregions].len = 0x47820000 - 0x47810000;
 	kernel_page->nregions++;
 	
+  mmu_load_ttb(ttb);
   mmu_enable();
 }
 

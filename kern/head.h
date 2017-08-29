@@ -58,6 +58,13 @@ struct proc {
 	proc_t waiting_on;
 	proc_list_t waiting;
 	
+	struct {
+		reg_t start;
+		size_t len;
+		int flags;
+		int to;
+	} addr_offer;
+	
 	uint8_t kstack[KSTACK_LEN];
 };
 
@@ -132,7 +139,3 @@ func_label(label_t *l,
 
 extern proc_t up;
 extern kernel_page_t kernel_page;
-
-extern uint32_t *_kernel_start;
-extern uint32_t *_kernel_end;
-

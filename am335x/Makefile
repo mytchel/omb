@@ -41,7 +41,7 @@ CFLAGS = -std=c89 \
 	-Wall -Werror \
 	-mcpu=cortex-a8 \
 	-nostdinc -ffreestanding \
-	-mpic-data-is-text-relative -fpic -fpie \
+	-fpic -fpie \
 	-Iinclude -I../include -Ikern/
 
 LDFLAGS = -nostdlib -nodefaultlibs -static \
@@ -87,10 +87,8 @@ CLEAN += proc0.list am335x.list am335x.umg
 	           -x -X -S \
 	            $< $@
 
-BASE_UART_SRC_A := \
-        ../lib/libc/sys.S
-
-BASE_UART_SRC_C := \
+BASE_UART_SRC := \
+        ../lib/libc/sys.S         \
 				base/uart/main.c          \
         ../lib/libstring/conv.c   \
         ../lib/libstring/scanf.c  \
@@ -99,9 +97,9 @@ BASE_UART_SRC_C := \
 				
 
 BASE_UART_OBJECTS = \
-	$(BASE_UART_SRC_A:%.S=%.o) \
-	$(BASE_UART_SRC_C:%.c=%.o)
+	$(BASE_UART_SRC:%.S=%.o:%.c=%.o)
 
+CLEAN += $(BASE_UART_OBJECTS) 
 base/uart.elf: base/linker.ld $(BASE_UART_OBJECTS)
 	$(LD) $(LDFLAGS) \
 		-T base/linker.ld \
@@ -109,40 +107,32 @@ base/uart.elf: base/linker.ld $(BASE_UART_OBJECTS)
 		-lgcc
 
 
-
-P0SRC_A := \
-        ../lib/libc/sys.S
-
-P0SRC_C := \
+BASE_PROCS = \
+        base/uart.elf
+        
+P0_SRC := \
+        ../lib/libc/sys.S         \
 				proc0/main.c              \
         ../lib/libc/util.c
 				
 
-P0OBJECTS := \
-	$(P0SRC_A:%.S=%.o) \
-	$(P0SRC_C:%.c=%.o)
+P0_OBJECTS := \
+	$(P0_SRC:%.S=%.o:%.c=%.o)
 
-BASE_PROCS = \
-        base/uart.elf
-        
-CLEAN += $(P0OBJECTS)
+CLEAN += $(P0_OBJECTS)
 CLEAN += proc0.elf proc0.bo 
 CLEAN += $(BASE_PROCS) $(BASE_PROCS:%.elf=%.bo)
 
-proc0.elf: proc0/linker.ld $(P0OBJECTS) $(BASE_PROCS:%.elf=%.bo)
+proc0.elf: proc0/linker.ld $(P0_OBJECTS) $(BASE_PROCS:%.elf=%.bo)
 	$(LD) $(LDFLAGS) \
 		-T proc0/linker.ld \
-		-o $@ $(P0OBJECTS) \
+		-o $@ $(P0_OBJECTS) \
 		-lgcc
 		
 
-
 KSRC_A := \
-        kern/vectors.S          \
-        kern/asm.S
-
-
-KSRC_C := \
+        kern/vectors.S            \
+        kern/asm.S                \
         kern/main.c               \
         kern/trap.c               \
         kern/timer.c              \
@@ -158,8 +148,7 @@ KSRC_C := \
 
 
 KOBJECTS := \
-	$(KSRC_A:%.S=%.o) \
-	$(KSRC_C:%.c=%.o)
+	$(KSRC_A:%.S=%.o:%.c=%.o)
 
 CLEAN += $(KOBJECTS)
 CLEAN += $(TARGET).elf $(TARGET).list proc0.bo

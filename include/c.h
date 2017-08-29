@@ -88,6 +88,20 @@ reply_recv(int pid,
 int
 proc_create(proc_page_t proc_page);
 
+#define ADDR_give     (0<<0)
+#define ADDR_take     (1<<0)
+
+#define ADDR_read     (1<<1)
+#define ADDR_write    (1<<2)
+#define ADDR_cache    (1<<3)
+#define ADDR_exec     (1<<4)
+
+int
+addr_offer(int pid, void *start, size_t len, int flags);
+
+int
+addr_accept(int pid, void *start, size_t len, int flags);
+
 bool
 cas(void *addr, void *old, void *new);
 

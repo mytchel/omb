@@ -90,8 +90,6 @@ schedule(proc_t n)
 		goto_label(&up->label);
 		
 	} else {
-		debug("idle\n");
-		
 		set_intr(INTR_on);
 		while (true)
 			;
@@ -155,18 +153,13 @@ proc_start(void)
 		/* Do something. */
 	}
 	
-	debug("proc %i go start message\n", up->pid);
-	
 	u.pc = req->pc;
 	u.sp = req->sp;
-	
-	debug("proc %i replying with ok\n", up->pid);
 	
 	if (kreply(p, OK) != OK) {
 		/* Do something. */
 	}
 	
-	debug("proc %i droping to 0x%h with sp 0x%h\n", up->pid, u.pc, u.sp);	
 	drop_to_user(&u, up->kstack, KSTACK_LEN);
 }
 

@@ -214,21 +214,29 @@ handle_addr_request(int pid,
                     addr_req_t req,
                     addr_resp_t resp)
 {
+	reg_t addr;
 	size_t len;
+	int flags;
 	
 	len = PAGE_ALIGN(req->len);
-
-	if (req->addr != nil) {
-		resp->addr = get_io(req->addr, len);
-	} else {
-		resp->addr = get_ram(len);
-	}
-	
-	if (resp->addr != nil) {
-		return OK;
-	} else {
+	if (len == 0) {
 		return ERR;
 	}
+
+	flags = ADDR_read|ADDR_write|ADDR_give;
+	
+	if (req->addr != nil) {
+		addr = get_io(req->addr, len);
+	} else {
+		addr = get_ram(len);
+		flags |= ADDR_cache;
+	}
+	
+	if (addr == nil) {
+		return ERR;
+	}
+	
+	return addr_accept(pid, (void *) addr, len, flags);
 }
 
 int
@@ -238,7 +246,7 @@ main(void)
 	proc_page_t page;
 	message_t *type;
 	int pid, ret;
-		
+	
 	page = get_proc_page();
 	kern_page = get_kernel_page();
 	

@@ -28,7 +28,7 @@
 #include "head.h"
 #include "fns.h"
 #include <stdarg.h>
-#include <uart.h>
+#include <am335x/uart.h>
 
 static uart_regs_t uart = (uart_regs_t) UART0;
 

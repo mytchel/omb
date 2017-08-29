@@ -27,7 +27,7 @@
 
 #include <c.h>
 #include <sys.h>
-#include <uart.h>
+#include <am335x/uart.h>
 
 static uart_regs_t uart;
 
@@ -50,22 +50,37 @@ puts(const char *c)
     putc(*c++);
 }
 
+/*
+static char
+getc(void)
+{
+	while (uart->lsr & 1)
+		;
+	
+	return uart->hr & 0xff;
+}
+*/
+
 void
 main(void)
 {
 	addr_req_t areq;
-	addr_resp_t aresp;
 	proc_page_t page;
 	int pid;
 	
 	page = get_proc_page();
 	
-	areq = (addr_req_t) page->m_out;
-	aresp = (addr_resp_t) page->m_in;
-	
+	areq = (addr_req_t) page->m_out;	
 	areq->type = MESSAGE_addr;
 	areq->addr = UART0;
 	areq->len = sizeof(struct uart_regs);
+	
+	if (addr_offer(0, (void *) 0xa0000, sizeof(struct uart_regs),
+	               ADDR_read|ADDR_write|ADDR_take) != OK) {
+		/* Fuck. */
+		while (true)
+			;
+	}
 	
 	if (send(0) != OK) {
 		/* Fuck. */
@@ -73,7 +88,7 @@ main(void)
 			;
 	}
 	
-	uart = (uart_regs_t) aresp->addr;
+	uart = (uart_regs_t) 0xa0000;
 	
 	puts("Hello from userspace!\n");
 	
