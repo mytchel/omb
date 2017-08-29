@@ -186,7 +186,7 @@ init_sections(kernel_page_t kern_page)
 static void
 init_procs(proc_page_t my_page)
 {
-	reg_t page, stack;
+	reg_t page, stack, space;
 	proc_init_req_t req;
 	int i, pid;
 	
@@ -196,9 +196,10 @@ init_procs(proc_page_t my_page)
 	i = 0;
 	while (procs[i] != nil) {
 		page = get_ram(PAGE_SIZE);
+		space = get_ram(PAGE_SIZE);
 		stack = get_ram(PAGE_SIZE);
 		
-		pid = proc_create((proc_page_t) page);
+		pid = proc_create((proc_page_t) page, (void *) space);
 		
 		req->pc = 0x82006000 + procs[i];
 		req->sp = stack + PAGE_SIZE;

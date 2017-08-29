@@ -35,6 +35,7 @@ extern void *_proc0_data_end;
 
 static uint8_t proc0_page_page[PAGE_SIZE]__attribute__((__aligned__(PAGE_SIZE)));
 static uint8_t proc0_stack_page[PAGE_SIZE]__attribute__((__aligned__(PAGE_SIZE)));
+static uint8_t proc0_space_page[PAGE_SIZE]__attribute__((__aligned__(PAGE_SIZE)));
 
 static void
 proc0_start(void)
@@ -50,9 +51,13 @@ proc0_start(void)
 static proc_t
 init_proc0(void)
 {
+	addr_space_t space;
 	proc_t p;
 	
-	p = proc_new((void *) proc0_page_page);
+	space = (addr_space_t) proc0_space_page;
+	memset(space, 0, PAGE_SIZE);
+	
+	p = proc_new(space, (void *) proc0_page_page);
 	if (p == nil) {
 		panic("Failed to create proc0!\n");
 	}

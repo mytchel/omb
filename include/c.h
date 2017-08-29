@@ -86,7 +86,7 @@ reply_recv(int pid,
            int rpid);
 
 int
-proc_create(proc_page_t proc_page);
+proc_create(proc_page_t proc_page, void *space_page);
 
 #define ADDR_give     (0<<0)
 #define ADDR_take     (1<<0)

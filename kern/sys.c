@@ -207,11 +207,15 @@ sys_reply_recv(int pid,
 }
 
 reg_t
-sys_proc_create(proc_page_t page)
+sys_proc_create(proc_page_t page, void *space_page)
 {
+	addr_space_t space;
 	proc_t p;
 	
-	p = proc_new((void *) page);
+	space = (addr_space_t) space_page;
+	memset(space_page, 0, PAGE_SIZE);
+	
+	p = proc_new(space, (void *) page);
 	if (p == nil) {
 		return ERR;
 	}
@@ -237,37 +241,87 @@ sys_addr_offer(int pid, reg_t start, size_t len, int flags)
 	return OK;
 }
 
+static reg_t
+get_page(void *arg)
+{
+	proc_t p = (proc_t) arg;
+	
+	debug("should get page from %i\n", p->pid);
+	
+	return nil;
+}
+
 reg_t
 sys_addr_accept(int pid, reg_t start, size_t len, int flags)
 {
+	addr_space_t from, to;
+	reg_t vf, vt, pa;
+	void *arg;
+	size_t l;
 	proc_t p;
+	int f;
 	
 	debug("%i reply to addr offer from %i for %i bytes at 0x%h with flags 0b%b\n",
 	      up->pid, pid, len, start, flags);
 	
 	p = find_proc(pid);
 	if (p == nil) {
+		debug("proc not found\n");
 		return ERR;
-	}
-	
-	if ((flags >> 1) != (p->addr_offer.flags >> 1)) {
-		return ERR;
-	}
-	
-	if ((flags & ADDR_give) && (p->addr_offer.flags & ADDR_take)) {
-		debug("take from me and give to offerer.\n");
 		
-	} else if ((flags & ADDR_take) && (p->addr_offer.flags & ADDR_give)) {
+	} else if (up->pid != p->addr_offer.to) {
+		debug("%i didn't offer to me\n", p->pid);
+		return ERR;
+		
+	} else if (len != p->addr_offer.len) {
+		debug("len %i != %i\n", len, p->addr_offer.len);
+		return ERR;
+
+	} else if ((flags >> 1) != (p->addr_offer.flags >> 1)) {
+		return ERR;
+	} 
+	
+	debug("my tg = %i, their tg = %i\n", flags & 1, p->addr_offer.flags & 1);
+	
+	if (!(flags & ADDR_take) && (p->addr_offer.flags & ADDR_take)) {
+		debug("take from me and give to offerer.\n");
+		from = up->space;
+		vf = start;
+		to = p->space;
+		vt = p->addr_offer.start;
+		arg = p;
+		
+	} else if ((flags & ADDR_take) && !(p->addr_offer.flags & ADDR_take)) {
 		debug("take from offerer and give to me.\n");
+		from = p->space;
+		vf = p->addr_offer.start;
+		to = up->space;
+		vt = start;
+		arg = up;
 		
 	} else {
+		debug("take/give bad\n");
 		return ERR;
 	}
 	
-	debug("flags good.\n");
+	debug("everything good.\n");
 	
+	for (l = 0; l < len; l += PAGE_SIZE) {
+		debug("take from 0x%h and give to 0x%h\n", vf + l, vt + l);
+		pa = space_find(from, vf + l, &f);
+		if (p == nil) {
+			return ERR;
+		}
+		
+		debug("for pa 0x%h\n", pa);
+		if (!space_map(to, pa, vt + l, flags, get_page, arg)) {
+			return ERR;
+		}
+		
+		space_unmap(from, vf + l);
+	}
 	
-	return ERR;
+	return OK;
 }
 
 void *systab[NSYSCALLS] = {

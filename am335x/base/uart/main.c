@@ -26,6 +26,7 @@
  */
 
 #include <c.h>
+#include <mach.h>
 #include <sys.h>
 #include <am335x/uart.h>
 
@@ -73,9 +74,9 @@ main(void)
 	areq = (addr_req_t) page->m_out;	
 	areq->type = MESSAGE_addr;
 	areq->addr = UART0;
-	areq->len = sizeof(struct uart_regs);
+	areq->len = PAGE_ALIGN(sizeof(struct uart_regs));
 	
-	if (addr_offer(0, (void *) 0xa0000, sizeof(struct uart_regs),
+	if (addr_offer(0, (void *) 0xa0000, areq->len,
 	               ADDR_read|ADDR_write|ADDR_take) != OK) {
 		/* Fuck. */
 		while (true)

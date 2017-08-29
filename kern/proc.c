@@ -164,7 +164,7 @@ proc_start(void)
 }
 
 proc_t
-proc_new(void *sys_page)
+proc_new(addr_space_t space, void *sys_page)
 {
   int pid, npid;
   proc_t p;
@@ -181,6 +181,7 @@ proc_new(void *sys_page)
   
   p->pid = pid;
 	p->page = sys_page;
+	p->space = space;
 	
 	memset(p->page, 0, PAGE_SIZE);
 	p->page->pid = pid;

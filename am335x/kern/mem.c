@@ -192,12 +192,13 @@ bool
 space_map(addr_space_t space, 
           reg_t pa, reg_t va,
           int flags,
-          reg_t (*get_page)(void))
+          reg_t (*get_page)(void *arg),
+          void *arg)
 {
 	uint32_t *tab, ap, c;
 	
 	if (space->tab[L1X(va)] == L1_FAULT) {
-		tab = (uint32_t *) get_page();
+		tab = (uint32_t *) get_page(arg);
 		if (tab == nil) {
 			return false;
 		}

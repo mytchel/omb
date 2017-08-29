@@ -76,7 +76,7 @@ struct proc_list {
 };
 
 proc_t
-proc_new(void *sys_page);
+proc_new(addr_space_t space, void *sys_page);
 
 proc_t
 find_proc(int pid);
@@ -141,7 +141,8 @@ bool
 space_map(addr_space_t space, 
           reg_t pa, reg_t va,
           int flags,
-          reg_t (*get_page)(void));
+          reg_t (*get_page)(void *arg),
+          void *arg);
 
 reg_t
 space_find(addr_space_t space,
